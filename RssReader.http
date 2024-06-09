@@ -1,0 +1,6 @@
+@RssReader_HostAddress = http://localhost:5191
+
+GET {{RssReader_HostAddress}}/RssReader/
+Accept: application/json
+
+###
