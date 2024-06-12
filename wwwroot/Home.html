@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FeedReal</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://unpkg.com/htmx.org@1.6.1"></script>
+</head>
+<body>
+    <section id="main" class="h-100" style="background-color: #eee;">
+        <div class="container py-5 h-100">
+            <div class="row d-flex justify-content-center align-items-center h-100">
+                <div class="col-xl-10">
+                    <div class="card rounded-3 text-black">
+                        <div class="row g-0">
+                            <div class="col-lg-6">
+                                <div class="card-body p-md-5 mx-md-4">
+
+                                    <div class="text-center">
+                                        <h4 class="mt-1 mb-5 pb-1">Feed Freedom</h4>
+                                    </div>
+                                    <div id="login-section" hx-get="/login-form" hx-trigger="load" hx-swap="innerHTML"></div>
+                                </div>
+                            </div>
+                            <div class="col-lg-6 d-flex align-items-center" style="background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593); border-radius: .3rem;">
+                                <div class="text-white px-3 py-4 p-md-5 mx-md-4">
+                                    <h4 class="mb-4">Escape the Algorithm & Embrace the Clarity of RSS</h4>
+                                    <p class="small mb-0">In an age where social media algorithms dictate what we see, it's easy to become lost in a sea of targeted ads and manipulated content that aims to keep you engaging, not necessarily with important information or priorities, without you figuring it out. Break free from this cycle with RSS, a transparent and unbiased way to consume content. RSS feeds deliver the information you want, when you want it, without the interference of algorithms and ads. Join the movement to take back control of your media consumption and stay informed with pure, unfiltered content.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+</body>
+</html>

@@ -14,8 +14,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="dapper" Version="2.1.35" />
+    <PackageReference Include="microsoft.aspnetcore.session" Version="2.2.0" />
     <PackageReference Include="microsoft.data.sqlite" Version="8.0.6" />
+    <PackageReference Include="microsoft.extensions.caching.memory" Version="8.0.0" />
+    <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
+    <PackageReference Include="System.ServiceModel.Syndication" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
