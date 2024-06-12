@@ -18,9 +18,8 @@ using System.Text;
 using System.Xml;
 using System.ServiceModel.Syndication;
 
-var builder = WebApplication.CreateBuilder(args);
-
 #region services
+var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddSingleton<IDbConnection>(sp => new SqliteConnection("Data Source=./wwwroot/RssReader.db"));
 
 builder.Services.AddDistributedMemoryCache();
@@ -36,18 +35,24 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     {
         options.LoginPath = "/login-form";
         options.LogoutPath = "/logout";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
+        options.SlidingExpiration = true;
     });
-
+builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 
 #endregion
 
+#region Application Middleware
 var app = builder.Build();
 
 app.UseStaticFiles();
 app.UseSession();
 app.UseAuthentication();
+app.UseAuthorization();
 app.UseAntiforgery();
+
+#endregion
 
 #region Initializion 
 var antiforgery = app.Services.GetRequiredService<IAntiforgery>();
@@ -55,7 +60,7 @@ string DbPath = "Data Source=./wwwroot/RssReader.db";
 #endregion
 
 #region HtmlTemplates 
-var loginHtml = @"
+var loginHtml = """
 <form id='login-section' hx-post='/login' hx-trigger='submit' hx-target='#main' hx-swap='outerHTML'>
     <div data-mdb-input-init class='form-outline mb-4'>
         <label class='form-label' for='form2Example11'>Email</label>
@@ -73,10 +78,10 @@ var loginHtml = @"
         <p class='mb-0 me-2 mr-2'>Don't have an account?</p>
         <button hx-get='/signup-form' hx-swap='innerHTML' hx-target='#login-section' type='button' data-mdb-button-init data-mdb-ripple-init class='btn btn-outline-danger'>Create new</button>
     </div>
-</form>";
+</form>
+""";
 
-
-var signupHtml = @"
+var signupHtml = """
 <form id='signup-section' hx-post='/signup' action='/signup' hx-vals='{{confirmPassword: null}}' hx-target='#response' hx-swap='innerHTML'>
     <div data-mdb-input-init class='form-outline mb-4'>
         <label class='form-label' for='form2Example11'>Email</label>
@@ -99,14 +104,15 @@ var signupHtml = @"
         <p class='mb-0 me-2 mr-2'>Already have an account?</p>
         <button hx-get='/login-form' hx-swap='innerHTML' hx-target='#signup-section' type='button' data-mdb-button-init data-mdb-ripple-init class='btn btn-outline-danger'>Log in</button>
     </div>
-</form>";
+</form>
+""";
 
-var feedPageHtml = @"
+var feedPageHtml = """
 <div class='container'>
     <div class='row'>
         <div class='col-md-12'>
             <h1>RSS/ATOM Feeds</h1>
-            <form hx-post='/feeds' hx-trigger='submit' hx-target='#feeds' hx-swap='beforeend'>
+            <form hx-post='/feeds' hx-trigger='submit' hx-target='#feeds' hx-swap='outerHTML'>
                 <input type='hidden' name='__RequestVerificationToken' value='{0}' />
                 <div class='mb-3'>
                     <label for='feedUrl' class='form-label'>Feed URL</label>
@@ -122,18 +128,17 @@ var feedPageHtml = @"
         </div>
     </div>
 </div>
-";
+""";
 
-
-var feedHtmlTemplate = @"
+var feedHtmlTemplate = """
     <div class='feed-url'>
         {0}
-        <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-headers='{{""X-CSRF-TOKEN"":""{2}""}}' hx-target='.feed-url' hx-swap='outerHTML'>
+        <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-headers='{{"X-CSRF-TOKEN":"{2}"}}' hx-target='.feed-url' hx-swap='outerHTML'>
             <input type='hidden' name='Url' value='{1}' />
             <button type='submit' class='btn btn-danger'>Delete</button>
         </form>
-    </div>";
-
+    </div>
+""";
 #endregion
 
 #region APIs
@@ -175,15 +180,31 @@ app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInpu
 });
 
 
-app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context) =>
+app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, IDbConnection connection) =>
 {
+    // Check if the user is already authenticated
     var tokens = antiforgery.GetAndStoreTokens(context);
     context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
+    if (context.User.Identity.IsAuthenticated)
+    {
+        var email = context.User.Identity.Name;
+        var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = email });
+
+        if (user != null)
+        {
+            var html1 = string.Format(feedPageHtml, tokens.RequestToken);
+            return Results.Content($"authenticated:{html1}", "text/html");
+
+        }
+    }
+
+    // User is not authenticated, return login form
     var html = string.Format(loginHtml, tokens.RequestToken);
-    return Results.Content(html, "text/html"); 
+    return Results.Content(html, "text/html");
 });
 
-app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput, IAntiforgery antiforgery) =>
+
+app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput, IAntiforgery antiforgery, IDbConnection connection) =>
 {
     try
     {
@@ -194,31 +215,38 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput
         context.Response.StatusCode = 400;
         return Results.Content("Invalid anti-forgery token.");
     }
-    using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
+
+    var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userInput.email });
+
+    if (user != null && BCrypt.Net.BCrypt.Verify(userInput.password, user.password))
     {
-        var user = await dbConnection.QueryFirstOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userInput.email });
-        if (user == null || !BCrypt.Net.BCrypt.Verify(userInput.password, user.password))
+        
+        var claims = new List<Claim>
         {
-            return Results.Content("<div id='message'>User not found</div>", contentType: "text/html");
-        }
-        context.Session.SetString("UserId", user.id);
-        var claims = new List<Claim> { new Claim(ClaimTypes.Name, user.email) };
+            new Claim(ClaimTypes.Name, user.email)
+        };
         var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        var authProperties = new AuthenticationProperties { IsPersistent = true };
-        await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
+        context.Session.SetString("UserId", user.id.ToString());
+        await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity));
         var tokens = antiforgery.GetAndStoreTokens(context);
         context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
-        var feedPageHtmlWithToken = string.Format(feedPageHtml, tokens.RequestToken);
-        return Results.Content(feedPageHtmlWithToken, "text/html");
+        var html = string.Format(feedPageHtml, tokens.RequestToken);
+        return Results.Content(html, "text/html");
+    }
+    else
+    {
+        return Results.Content("Invalid email or password", "text/html");
     }
 });
+
 
 app.MapPost("/logout", async (HttpContext context) =>
 {
     context.Session.Clear();
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-    return Results.Ok("Logged out successfully");
+    return Results.Redirect("/login-form");
 });
+
 
 app.MapPost("/feeds", async (HttpContext context, [FromForm] Feed feed, IAntiforgery antiforgery) =>
 {
@@ -250,6 +278,7 @@ app.MapPost("/feeds", async (HttpContext context, [FromForm] Feed feed, IAntifor
 });
 app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 {
+
     var email = context.User.Identity.Name;
     using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
     {
