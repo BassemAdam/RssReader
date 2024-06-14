@@ -459,40 +459,44 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
     }
 
     var htmlBuilder = new StringBuilder();
-    htmlBuilder.Append("<div class='container-fluid mt-5'>"); // Use container-fluid for full width
+    htmlBuilder.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
 
     // Add a header for all feeds with the channel name
     if (syndicationFeed.Title != null)
     {
-        htmlBuilder.Append("<div class='row mb-4'>")
-                   .Append("<div class='col-12'>")
-                   .Append("<h1 class='display-4 text-center'>").Append(syndicationFeed.Title.Text).Append("</h1>")
+        htmlBuilder.Append("<div class='row mb-4 justify-content-center'>") // Added justify-content-center to center the content
+                   .Append("<div class='col-12 col-md-10 col-lg-8'>") // Adjust column sizes for different screens
+                   .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>").Append(syndicationFeed.Title.Text).Append("</h1>")
                    .Append("</div>")
                    .Append("</div>");
     }
 
     foreach (var item in feedItems)
     {
-        htmlBuilder.Append("<div class='row mb-4'>")
-                   .Append("<div class='col-12'>")
-                   .Append("<div class='card'>");
+        htmlBuilder.Append("<div class='row mb-4 justify-content-center'>") // Added justify-content-center to center the cards
+                   .Append("<div class='col-12 col-md-10 col-lg-8'>") // Adjust column sizes for different screens
+                   .Append("<div class='card' style='word-wrap: break-word;'>");
 
         if (item.Title != null)
         {
             htmlBuilder.Append("<div class='card-header'>")
-                       .Append("<h5 class='card-title font-weight-bold text-center'>").Append(item.Title.Text).Append("</h5>")
+                       .Append("<h5 class='card-title font-weight-bold text-center' style='font-size: 1.25rem;'>").Append(item.Title.Text).Append("</h5>")
                        .Append("</div>");
         }
 
         htmlBuilder.Append("<div class='card-body'>");
 
+        // Ensure images within the description are responsive
         var description = item.Summary?.Text ?? string.Empty;
-        htmlBuilder.Append("<p class='card-text'>").Append(description).Append("</p>");
+        var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+        htmlBuilder.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
 
         htmlBuilder.Append("</div>");
 
+
         // Card footer with flexbox for responsive alignment
         htmlBuilder.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
+
 
         if (item.PublishDate != null)
         {
