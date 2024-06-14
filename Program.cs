@@ -459,14 +459,14 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
     }
 
     var htmlBuilder = new StringBuilder();
-    htmlBuilder.Append("<div class='container mt-5'>");
+    htmlBuilder.Append("<div class='container-fluid mt-5'>"); // Use container-fluid for full width
 
     // Add a header for all feeds with the channel name
     if (syndicationFeed.Title != null)
     {
         htmlBuilder.Append("<div class='row mb-4'>")
-                   .Append("<div class='col-md-12'>")
-                   .Append("<h1 class='display-4'>").Append(syndicationFeed.Title.Text).Append("</h1>")
+                   .Append("<div class='col-12'>")
+                   .Append("<h1 class='display-4 text-center'>").Append(syndicationFeed.Title.Text).Append("</h1>")
                    .Append("</div>")
                    .Append("</div>");
     }
@@ -474,13 +474,13 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
     foreach (var item in feedItems)
     {
         htmlBuilder.Append("<div class='row mb-4'>")
-                   .Append("<div class='col-md-12'>")
-                   .Append("<div class='card h-100'>");
+                   .Append("<div class='col-12'>")
+                   .Append("<div class='card'>");
 
         if (item.Title != null)
         {
             htmlBuilder.Append("<div class='card-header'>")
-                       .Append("<h5 class='card-title font-weight-bold'>").Append(item.Title.Text).Append("</h5>")
+                       .Append("<h5 class='card-title font-weight-bold text-center'>").Append(item.Title.Text).Append("</h5>")
                        .Append("</div>");
         }
 
@@ -489,14 +489,11 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
         var description = item.Summary?.Text ?? string.Empty;
         htmlBuilder.Append("<p class='card-text'>").Append(description).Append("</p>");
 
-        if (item.Links.Any())
-        {
-            htmlBuilder.Append("<a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary' target='_blank'>Read more</a>");
-        }
-
         htmlBuilder.Append("</div>");
 
-        // Handle publish date
+        // Card footer with flexbox for responsive alignment
+        htmlBuilder.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
+
         if (item.PublishDate != null)
         {
             string formattedDate;
@@ -510,21 +507,31 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
                 formattedDate = "Unknown"; // Handle invalid date gracefully
             }
 
-            htmlBuilder.Append("<div class='card-footer text-muted'>")
+            htmlBuilder.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
                        .Append("Published on: ").Append(formattedDate)
                        .Append("</div>");
         }
 
-        htmlBuilder.Append("</div></div></div>");
+        if (item.Links.Any())
+        {
+            htmlBuilder.Append("<div class='col-12 col-md-auto text-center text-md-right'>")
+                       .Append("<a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary mt-2 mt-md-0'>Read more</a>")
+                       .Append("</div>");
+        }
+
+        htmlBuilder.Append("</div>")
+                   .Append("</div></div></div>");
     }
 
     htmlBuilder.Append("</div>");
-    htmlBuilder.Append("<script src='https://code.jquery.com/jquery-3.5.1.slim.min.js'></script>");
-    htmlBuilder.Append("<script src='https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js'></script>");
-    htmlBuilder.Append("<script src='https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js'></script>");
 
     return Results.Content(htmlBuilder.ToString(), "text/html");
 });
+
+
+
+
+
 
 
 

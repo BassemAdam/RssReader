@@ -73,3 +73,8 @@ body {
     background-color: #f0f0f0; /* Example highlight color */
     border-left: 5px solid #007bff; /* Example highlight indicator */
 }
+
+.card {
+    flex: 1 0 100%; /* Ensure cards take full width on smaller screens */
+    max-width: 100%; /* Ensure cards do not exceed container width */
+}
