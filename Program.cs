@@ -18,6 +18,7 @@ using System.Text;
 using System.Xml;
 using System.ServiceModel.Syndication;
 using BCrypt.Net;
+using System.Text.RegularExpressions;
 
 #region services
 var builder = WebApplication.CreateBuilder(args);
@@ -154,7 +155,7 @@ var feedPageHtml = @"
                         Feed Real
                     </div>
                     <button hx-post='/logout' hx-target='#main' hx-swap='outerHTML' class='btn btn-danger m-3'>Logout</button>
-                    <form id='add-feed-form' hx-post='/feeds' hx-trigger='submit' hx-target='#responseMessage' hx-swap='afterend'>
+                    <form id='add-feed-form' hx-post='/feeds' hx-trigger='submit' hx-target='#feed-list' hx-swap='innerHTML'>
                         <input type='hidden' name='__RequestVerificationToken' value='{0}' />
                         <div class='mb-3 p-3'>
                             <label for='feedUrl' class='form-label'>Feed URL</label>
@@ -206,6 +207,46 @@ var feedPageHtml = @"
     }});
     </script>
     ";
+#endregion
+
+#region Utility Methods
+ static bool IsRtlContent(string text)
+{
+    if (string.IsNullOrEmpty(text))
+    {
+        return false;
+    }
+
+    // Unicode ranges for RTL scripts
+    // Arabic: 0600–06FF, Hebrew: 0590–05FF, etc.
+    // You can add more ranges as needed
+    int[][] rtlRanges = new int[][]
+    {
+        new int[] { 0x0590, 0x05FF }, // Hebrew
+        new int[] { 0x0600, 0x06FF }, // Arabic
+        new int[] { 0x0750, 0x077F }, // Arabic Supplement
+        new int[] { 0x08A0, 0x08FF }, // Arabic Extended-A
+        new int[] { 0xFB50, 0xFDFF }, // Arabic Presentation Forms-A
+        new int[] { 0xFE70, 0xFEFF }, // Arabic Presentation Forms-B
+        new int[] { 0x0700, 0x074F }, // Syriac
+        new int[] { 0x0780, 0x07BF }, // Thaana
+        new int[] { 0x07C0, 0x07FF }, // NKo
+        new int[] { 0x0800, 0x083F }, // Samaritan
+        new int[] { 0x0840, 0x085F }, // Mandaic
+        new int[] { 0x0860, 0x086F }  // Syriac Supplement
+    };
+
+    foreach (char c in text)
+    {
+        int codePoint = (int)c;
+        if (rtlRanges.Any(range => codePoint >= range[0] && codePoint <= range[1]))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
 #endregion
 
 #region APIs
@@ -358,8 +399,9 @@ app.MapPost("/feeds", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
         if (user == null) return Results.NotFound("User not found");
         await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { feed.Url, UserId = userId });
     }
+    return Results.Redirect("/feeds-urls");
 
-        var successMessageHtml = @"
+    var successMessageHtml = @"
     <div id=""success-message"" class='alert alert-success' role='alert'>
       Feed URL has been added successfully!
     </div>
@@ -403,9 +445,12 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 
         foreach (var item in feedItems)
         {
-            html.Append("<div class='row mb-4 justify-content-center'>")
-                .Append("<div class='col-12 col-md-10 col-lg-8'>")
-                .Append("<div class='card' style='word-wrap: break-word;'>");
+            bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
+
+            var cardClass = isRtlContent ? "card rtl" : "card";
+            html.Append($"<div class='row mb-4 justify-content-center'>")
+           .Append($"<div class='col-12 col-md-10 col-lg-8'>")
+           .Append($"<div class='{cardClass}' style='word-wrap: break-word;'>");
 
             if (item.Title != null)
             {
@@ -418,11 +463,17 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 
             // Ensure images within the description are responsive
             var description = item.Summary?.Text ?? string.Empty;
-            var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
-            html.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
+            //var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+           // html.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
 
+           
+            description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+            // Making images responsive
+            description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+
+            html.Append("<p class='card-text'>").Append(description).Append("</p>");
             html.Append("</div>");
-
             // Card footer with flexbox for responsive alignment
             html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
 
@@ -496,9 +547,14 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
 
     foreach (var item in feedItems)
     {
-        htmlBuilder.Append("<div class='row mb-4 justify-content-center'>") // Added justify-content-center to center the cards
-                   .Append("<div class='col-12 col-md-10 col-lg-8'>") // Adjust column sizes for different screens
-                   .Append("<div class='card' style='word-wrap: break-word;'>");
+        
+        // Assuming you have a way to determine if the content is RTL
+        bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
+
+        var cardClass = isRtlContent ? "card rtl" : "card";
+        htmlBuilder.Append($"<div class='row mb-4 justify-content-center'>")
+                   .Append($"<div class='col-12 col-md-10 col-lg-8'>")
+                   .Append($"<div class='{cardClass}' style='word-wrap: break-word;'>");
 
         if (item.Title != null)
         {
@@ -511,8 +567,15 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
 
         // Ensure images within the description are responsive
         var description = item.Summary?.Text ?? string.Empty;
-        var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
-        htmlBuilder.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
+        //var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+       // htmlBuilder.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
+
+        description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+
+        // Making images responsive
+        description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+
+        htmlBuilder.Append("<p class='card-text'>").Append(description).Append("</p>");
 
         htmlBuilder.Append("</div>");
 
@@ -574,7 +637,7 @@ app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection
     <li class='list-group-item d-flex justify-content-between align-items-center feed-url'>
         <span class='feed-url-text text-truncate'>All Feeds</span>
         <div class='btn-group'>
-            <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/feeds' hx-target='#feeds' hx-swap='innerHTML'>View</button>
+            <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/feeds' hx-target='#feeds' hx-swap='innerHTML   hx-trigger='every 1m''>View</button>
         </div>
     </li>", tokens.RequestToken);
 
@@ -585,8 +648,8 @@ app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection
         <li class='list-group-item d-flex justify-content-between align-items-center feed-url' data-url='{0}'>
             <span class='feed-url-text text-truncate' style='flex: 1;'>{0}</span>
             <div class='btn-group' role='group'>
-                <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/getFeedData?url={0}' hx-target='#feeds' hx-swap='innerHTML'>View</button>
-                <button type='button' class='btn btn-secondary btn-sm share-btn'>Share</button>
+                <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/getFeedData?url={0}' hx-target='#feeds' hx-swap='innerHTML   hx-trigger='every 1m''>View</button>
+
                 <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-vals='{{""Url"":""{0}""}}' hx-target='closest li' hx-swap='outerHTML' class='d-inline'>
                     <input type='hidden' name='__RequestVerificationToken' value='{1}' />
                     <button type='submit' class='btn btn-danger btn-sm delete-btn'>Delete</button>
@@ -596,51 +659,7 @@ app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection
     }
     htmlBuilder.Append("</ul>");
 
-    // Adjusted script for handling row selection and highlighting
-    htmlBuilder.Append(@"
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const feedList = document.getElementById('feed-list');
-    if (!feedList) return; // Ensure feed-list exists
-
-    feedList.addEventListener('click', function(e) {
-        // Ignore clicks on the delete button
-        if (e.target.classList.contains('delete-btn')) {
-            return;
-        }
-
-        // Prevent default form submission
-        if (e.target.tagName === 'FORM' || e.target.closest('form')) {
-            e.preventDefault();
-        }
-
-        // Handle highlighting the row on view button click
-        if (e.target.classList.contains('view-btn')) {
-            // Remove 'selected-feed' class from any previously selected URL
-            document.querySelectorAll('.feed-url').forEach(function(element) {
-                element.classList.remove('selected-feed');
-            });
-
-            // Add 'selected-feed' class to the parent li of the clicked button
-            const feedUrlElement = e.target.closest('.feed-url');
-            feedUrlElement.classList.add('selected-feed');
-        }
-    });
-});
-</script>
-
-<style>
-.selected-feed {
-    background-color: #e0f7fa; /* Adjust the highlight color as needed */
-}
-.feed-url-text {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-</style>");
-
-    return Results.Content(htmlBuilder.ToString(), "text/html");
+    return Results.Text(htmlBuilder.ToString(), "text/html");
 });
 
 app.MapDelete("/feeds", async (HttpContext context, IDbConnection dbConnection, IAntiforgery antiforgery) =>
@@ -668,7 +687,6 @@ app.MapDelete("/feeds", async (HttpContext context, IDbConnection dbConnection, 
     await dbConnection.ExecuteAsync("DELETE FROM Feeds WHERE Url = @Url AND UserId = @UserId", new { Url = url, UserId = userId });
     return Results.Ok();
 });
-
 #endregion
 
 app.Run();
