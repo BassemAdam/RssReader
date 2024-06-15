@@ -251,7 +251,7 @@ app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInpu
 app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, IDbConnection connection) =>
 {
     // Check if the user is already authenticated
-    var tokens = antiforgery.GetAndStoreTokens(context);
+   
     if (context.User.Identity.IsAuthenticated)
     {
         var email = context.User.Identity.Name;
@@ -259,44 +259,46 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
 
         if (user != null)
         {
-            var claims = new List<Claim>
-        {
-            new Claim(ClaimTypes.Name, user.email),
-            new Claim(ClaimTypes.NameIdentifier, user.id.ToString()),
-        };
-            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var authProperties = new AuthenticationProperties
-            {
-                IsPersistent = true,
-                AllowRefresh = true
-            };
+        //    var claims = new List<Claim>
+        //{
+        //    new Claim(ClaimTypes.Name, user.email),
+        //    new Claim(ClaimTypes.NameIdentifier, user.id.ToString()),
+        //};
+        //    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+        //    var authProperties = new AuthenticationProperties
+        //    {
+        //        IsPersistent = true,
+        //        AllowRefresh = true
+        //    };
 
 
-            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
-            context.Session.SetString("UserId", user.id.ToString());
+        //    await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
+           context.Session.SetString("UserId", user.id.ToString());
 
-            var html1 = string.Format(feedPageHtml, tokens.RequestToken);
-            return Results.Content(html1, "text/html");
+            var tokens = antiforgery.GetAndStoreTokens(context);
+            var html = string.Format(feedPageHtml, tokens.RequestToken);
+            return Results.Content(html, "text/html");
 
         }
     }
 
     // User is not authenticated, return login form
-    var html = string.Format(loginHtml, tokens.RequestToken);
-    return Results.Content(html, "text/html");
+    var tokens1 = antiforgery.GetAndStoreTokens(context);
+    var html1 = string.Format(loginHtml, tokens1.RequestToken);
+    return Results.Content(html1, "text/html");
 });
 
-app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userinput,IAntiforgery antiforgery, IDbConnection connection) =>
+app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] UserInput userinput,IAntiforgery antiforgery, IDbConnection connection) =>
 {
-    try
-    {
-        await antiforgery.ValidateRequestAsync(context);
-    }
-    catch (AntiforgeryValidationException)
-    {
-        context.Response.StatusCode = 400;
-        return Results.Content("Invalid anti-forgery token.");
-    }
+    //try
+    //{
+    //    await antiforgery.ValidateRequestAsync(context);
+    //}
+    //catch (AntiforgeryValidationException)
+    //{
+    //    context.Response.StatusCode = 400;
+    //    return Results.Content("Invalid anti-forgery token.");
+    //}
 
     var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userinput.email });
 
@@ -319,9 +321,10 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userinput
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
         context.Session.SetString("UserId", user.id.ToString());
 
-        var tokens = antiforgery.GetAndStoreTokens(context);
-        var html = string.Format(feedPageHtml, tokens.RequestToken);
-        return Results.Content(feedPageHtml, "text/html");
+        return Results.Redirect("/login-form");
+        //var tokens = antiforgery.GetAndStoreTokens(context);
+        //var html = string.Format(feedPageHtml, tokens.RequestToken);
+        //return Results.Content(html, "text/html");
     }
     else
     {
@@ -329,41 +332,31 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userinput
     }
 });
 
-//app.MapPost("/logout", async (HttpContext context,IAntiforgery antiforgery) =>
-//{
-//    context.Session.Clear();
-//    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-//    var tokens = antiforgery.GetAndStoreTokens(context);
-
-//    var html = string.Format(loginHtml, tokens.RequestToken);
-//    return Results.Content(html, "text/html");
- 
-//});
 app.MapPost("/logout", async (HttpContext context) =>
 {
     context.Session.Clear();
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     return Results.Redirect("/login-form");
 });
-app.MapPost("/feeds", async (HttpContext context, [FromForm] string Url ,IAntiforgery antiforgery ) =>
+
+app.MapPost("/feeds", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] Feed feed ,IAntiforgery antiforgery ) =>
 {
-    try
-    {
-        await antiforgery.ValidateRequestAsync(context);
-    }
-    catch (AntiforgeryValidationException)
-    {
-        context.Response.StatusCode = 400;
-        return Results.Content("Invalid anti-forgery token.");
-    }
+    //try
+    //{
+    //    await antiforgery.ValidateRequestAsync(context);
+    //}
+    //catch (AntiforgeryValidationException)
+    //{
+    //    context.Response.StatusCode = 400;
+    //    return Results.Content("Invalid anti-forgery token.");
+    //}
     var userId = context.Session.GetString("UserId");
     if (string.IsNullOrEmpty(userId)) return Results.BadRequest("User not logged in");
     using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
     {
         var user = await dbConnection.QueryFirstOrDefaultAsync<User>("SELECT * FROM Users WHERE Id = @UserId", new { UserId = userId });
         if (user == null) return Results.NotFound("User not found");
-        await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { Url, UserId = userId });
+        await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { feed.Url, UserId = userId });
     }
 
         var successMessageHtml = @"
