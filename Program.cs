@@ -17,11 +17,13 @@ using Org.BouncyCastle.Crypto.Generators;
 using System.Text;
 using System.Xml;
 using System.ServiceModel.Syndication;
+using BCrypt.Net;
 
 #region services
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddSingleton<IDbConnection>(sp => new SqliteConnection("Data Source=./wwwroot/RssReader.db"));
+var connectionString = builder.Configuration.GetConnectionString("RssReaderDb");
 
+builder.Services.AddScoped<IDbConnection>(sp => new SqliteConnection(connectionString));
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
 {
@@ -29,7 +31,6 @@ builder.Services.AddSession(options =>
     options.Cookie.HttpOnly = true; 
     options.Cookie.IsEssential = true; 
 });
-
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
     {
@@ -37,29 +38,28 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LogoutPath = "/logout";
         options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
         options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true; // Make the cookie inaccessible to JavaScript
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Ensure the cookie is only sent over HTTPS
+        options.Cookie.SameSite = SameSiteMode.Strict; // Prevent the browser from sending this cookie along with cross-site requests
     });
 builder.Services.AddAuthorization();
-builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
-
+builder.Services.AddAntiforgery();
 #endregion
 
 #region Application Middleware
 var app = builder.Build();
-
 app.UseStaticFiles();
 app.UseSession();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
-
 #endregion
 
 #region Initializion 
 var antiforgery = app.Services.GetRequiredService<IAntiforgery>();
 string DbPath = "Data Source=./wwwroot/RssReader.db";
 #endregion
-
-                
+   
 #region HtmlTemplates 
 var loginHtml = """
 <div  id = "main" class= "col-lg-10 login-section">
@@ -108,8 +108,6 @@ var loginHtml = """
 </ div >
 """;
 
-
-
 var signupHtml = """
 <div id="main" class="card">
     <div class="card-body">
@@ -147,78 +145,67 @@ var signupHtml = """
 """;
 
 var feedPageHtml = @"
-<div id='main'>
-    <div class='container-fluid'>
-        <div class='row'>
-            <!-- Sidebar -->
-            <div id='sidebar' class='bg-light border-right'>
-                <div class='sidebar-heading p-3'>
-                    Feed Real
-                </div>
-                <button hx-post='/logout' hx-target='#main' hx-swap='outerHTML' class='btn btn-danger m-3'>Logout</button>
-                <form id='add-feed-form' hx-post='/feeds' hx-trigger='submit' hx-target='#responseMessage' hx-swap='afterend'>
-                    <input type='hidden' name='__RequestVerificationToken' value='{0}' />
-                    <div class='mb-3 p-3'>
-                        <label for='feedUrl' class='form-label'>Feed URL</label>
-                        <input type='text' class='form-control' id='feedUrl' name='Url' required>
+    <div id='main'>
+        <div class='container-fluid'>
+            <div class='row'>
+                <!-- Sidebar -->
+                <div id='sidebar' class='bg-light border-right open'>
+                    <div class='sidebar-heading p-3'>
+                        Feed Real
                     </div>
-                    <button type='submit' class='btn btn-primary m-3'>Add Feed</button>
-                    <div id=""responseMessage""></div>
-                </form>
-                <div class='p-3'>
-                    <h5>Select a feed to display on the page</h5>
+                    <button hx-post='/logout' hx-target='#main' hx-swap='outerHTML' class='btn btn-danger m-3'>Logout</button>
+                    <form id='add-feed-form' hx-post='/feeds' hx-trigger='submit' hx-target='#responseMessage' hx-swap='afterend'>
+                        <input type='hidden' name='__RequestVerificationToken' value='{0}' />
+                        <div class='mb-3 p-3'>
+                            <label for='feedUrl' class='form-label'>Feed URL</label>
+                            <input type='text' class='form-control' id='feedUrl' name='Url' required>
+                        </div>
+                        <button type='submit' class='btn btn-primary m-3'>Add Feed</button>
+                        <div id='responseMessage'></div>
+                    </form>
+                    <div class='p-3'>
+                        <h5>Select a feed to display on the page</h5>
+                    </div>
+                    <div id='feed-list' hx-get='/feeds-urls' hx-trigger='load' class='p-3'>
+                        <!-- List of feeds will be dynamically loaded here -->
+                    </div>
                 </div>
-                <div id='feed-list' hx-get='/feeds-urls' hx-trigger='load' class='p-3'>
-                    <!-- List of feeds will be dynamically loaded here -->
+                <!-- Main content -->
+                <div class='col p-3 col-expanded' style='transition: margin-left 0.5s;'>
+                    <div id='feeds'>
+                        <!-- The feeds will be loaded here -->
+                    </div>
                 </div>
             </div>
-            <!-- Main content -->
-            <div class='col p-3' style='transition: margin-left 0.5s;'>
-                <div id='feeds'>
-                    <!-- The feeds will be loaded here -->
-                </div>
-            </div>
+            <button id='sidebarToggle' class='btn btn-primary' style='background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);'>&#9776;</button>
         </div>
-        <button id='sidebarToggle' class='btn btn-primary' style='background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);'>&#9776;</button>
     </div>
-</div>
-<script>
-document.getElementById('sidebarToggle').addEventListener('click', function() {{
-    var sidebar = document.getElementById('sidebar');
-    var mainContent = document.querySelector('.col');
-    var toggleButton = document.getElementById('sidebarToggle');
-    if (sidebar.classList.contains('open')) {{
-        sidebar.classList.remove('open');
-        mainContent.classList.remove('col-expanded');
-        toggleButton.style.left = '10px';
-    }} else {{
-        sidebar.classList.add('open');
-        mainContent.classList.add('col-expanded');
-        toggleButton.style.left = '340px';
-    }}
-}});
-document.getElementById('feed-list').addEventListener('click', function(e) {{
-    if (e.target.classList.contains('feed-url')) {{
-        var selectedUrl = document.querySelector('.feed-url.selected');
-        if (selectedUrl) {{
-            selectedUrl.classList.remove('selected');
+    <script>
+    document.getElementById('sidebarToggle').addEventListener('click', function() {{
+        var sidebar = document.getElementById('sidebar');
+        var mainContent = document.querySelector('.col');
+        var toggleButton = document.getElementById('sidebarToggle');
+        if (sidebar.classList.contains('open')) {{
+            sidebar.classList.remove('open');
+            mainContent.classList.remove('col-expanded');
+            toggleButton.style.left = '10px';
+        }} else {{
+            sidebar.classList.add('open');
+            mainContent.classList.add('col-expanded');
+            toggleButton.style.left = '340px';
         }}
-        e.target.classList.add('selected');
-    }}
-}});
-</script>
-";
-
-var feedHtmlTemplate = """
-    <div class='feed-url'>
-        {0}
-        <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-headers='{{"X-CSRF-TOKEN":"{2}"}}' hx-target='.feed-url' hx-swap='outerHTML'>
-            <input type='hidden' name='Url' value='{1}' />
-            <button type='submit' class='btn btn-danger'>Delete</button>
-        </form>
-    </div>
-""";
-
+    }});
+    document.getElementById('feed-list').addEventListener('click', function(e) {{
+        if (e.target.classList.contains('feed-url')) {{
+            var selectedUrl = document.querySelector('.feed-url.selected');
+            if (selectedUrl) {{
+                selectedUrl.classList.remove('selected');
+            }}
+            e.target.classList.add('selected');
+        }}
+    }});
+    </script>
+    ";
 #endregion
 
 #region APIs
@@ -229,7 +216,6 @@ app.MapGet("/signup-form", async (IAntiforgery antiforgery, HttpContext context)
     var html = string.Format(signupHtml, tokens.RequestToken);
     return Results.Content(html, "text/html");
 });
-
 
 app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInput, IDbConnection connection, IAntiforgery antiforgery) =>
 {
@@ -262,12 +248,10 @@ app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInpu
     return Results.Content(successHtml, "text/html");
 });
 
-
 app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, IDbConnection connection) =>
 {
     // Check if the user is already authenticated
     var tokens = antiforgery.GetAndStoreTokens(context);
-    context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
     if (context.User.Identity.IsAuthenticated)
     {
         var email = context.User.Identity.Name;
@@ -275,6 +259,22 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
 
         if (user != null)
         {
+            var claims = new List<Claim>
+        {
+            new Claim(ClaimTypes.Name, user.email),
+            new Claim(ClaimTypes.NameIdentifier, user.id.ToString()),
+        };
+            var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            var authProperties = new AuthenticationProperties
+            {
+                IsPersistent = true,
+                AllowRefresh = true
+            };
+
+
+            await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
+            context.Session.SetString("UserId", user.id.ToString());
+
             var html1 = string.Format(feedPageHtml, tokens.RequestToken);
             return Results.Content(html1, "text/html");
 
@@ -285,7 +285,6 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
     var html = string.Format(loginHtml, tokens.RequestToken);
     return Results.Content(html, "text/html");
 });
-
 
 app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput, IAntiforgery antiforgery, IDbConnection connection) =>
 {
@@ -315,12 +314,13 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput
             IsPersistent = true,
             AllowRefresh = true
         };
+
+  
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
         context.Session.SetString("UserId", user.id.ToString());
-    
-        //var tokens = antiforgery.GetAndStoreTokens(context);
-        //context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
-        //var html = string.Format(feedPageHtml, tokens.RequestToken);
+
+        var tokens = antiforgery.GetAndStoreTokens(context);
+        var html = string.Format(feedPageHtml, tokens.RequestToken);
         return Results.Content(feedPageHtml, "text/html");
     }
     else
@@ -328,7 +328,6 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput
         return Results.Content("Invalid email or password", "text/html");
     }
 });
-
 
 app.MapPost("/logout", async (HttpContext context,IAntiforgery antiforgery) =>
 {
@@ -343,8 +342,7 @@ app.MapPost("/logout", async (HttpContext context,IAntiforgery antiforgery) =>
  
 });
 
-
-app.MapPost("/feeds", async (HttpContext context, [FromForm] Feed feed) =>
+app.MapPost("/feeds", async (HttpContext context, [FromForm] string Url ,IAntiforgery antiforgery ) =>
 {
     try
     {
@@ -361,7 +359,7 @@ app.MapPost("/feeds", async (HttpContext context, [FromForm] Feed feed) =>
     {
         var user = await dbConnection.QueryFirstOrDefaultAsync<User>("SELECT * FROM Users WHERE Id = @UserId", new { UserId = userId });
         if (user == null) return Results.NotFound("User not found");
-        await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { feed.Url, UserId = userId });
+        await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { Url, UserId = userId });
     }
 
         var successMessageHtml = @"
@@ -376,6 +374,7 @@ app.MapPost("/feeds", async (HttpContext context, [FromForm] Feed feed) =>
 
     return Results.Content(successMessageHtml, "text/html");
 });
+
 app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 {
 
@@ -396,43 +395,70 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
         }
 
         var html = new StringBuilder();
-        //html.Append("<!DOCTYPE html><html lang='en'><head>");
-        //html.Append("<meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-        //html.Append("<link href='https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css' rel='stylesheet'>");
-        //html.Append("<title>RSS Feeds</title></head><body>");
-        html.Append("<div class='container mt-5'><div class='row'>");
+        html.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
+
+        // Add a header for all feeds with a generic title
+        html.Append("<div class='row mb-4 justify-content-center'>")
+            .Append("<div class='col-12 col-md-10 col-lg-8'>")
+            .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>All Feeds</h1>")
+            .Append("</div>")
+            .Append("</div>");
 
         foreach (var item in feedItems)
         {
-            html.Append("<div class='col-md-4'><div class='card mb-3'>");
+            html.Append("<div class='row mb-4 justify-content-center'>")
+                .Append("<div class='col-12 col-md-10 col-lg-8'>")
+                .Append("<div class='card' style='word-wrap: break-word;'>");
 
             if (item.Title != null)
             {
-                html.Append("<div class='card-header'>").Append(item.Title.Text).Append("</div>");
+                html.Append("<div class='card-header'>")
+                    .Append("<h5 class='card-title font-weight-bold text-center' style='font-size: 1.25rem;'>").Append(item.Title.Text).Append("</h5>")
+                    .Append("</div>");
             }
 
-            var link = item.Links.FirstOrDefault()?.Uri.ToString();
-            if (link != null && Uri.IsWellFormedUriString(link, UriKind.Absolute))
-            {
-                html.Append("<img class='card-img-top' src='").Append(link).Append("' alt='Feed Image' />");
-            }
+            html.Append("<div class='card-body'>");
 
+            // Ensure images within the description are responsive
             var description = item.Summary?.Text ?? string.Empty;
-            html.Append("<div class='card-body'><p class='card-text'>").Append(description).Append("</p></div>");
+            var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+            html.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
+
+            html.Append("</div>");
+
+            // Card footer with flexbox for responsive alignment
+            html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
+
+            if (item.PublishDate != null)
+            {
+                string formattedDate;
+                try
+                {
+                    var publishDate = item.PublishDate.ToLocalTime(); // Convert to local time
+                    formattedDate = publishDate.ToString("f"); // Full (long) date and time pattern
+                }
+                catch (ArgumentOutOfRangeException)
+                {
+                    formattedDate = "Unknown"; // Handle invalid date gracefully
+                }
+
+                html.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
+                    .Append("Published on: ").Append(formattedDate)
+                    .Append("</div>");
+            }
 
             if (item.Links.Any())
             {
-                html.Append("<div class='card-footer'><a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary'>Read more</a></div>");
+                html.Append("<div class='col-12 col-md-auto text-center text-md-right'>")
+                    .Append("<a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary mt-2 mt-md-0'>Read more</a>")
+                    .Append("</div>");
             }
 
-            html.Append("</div></div>");
+            html.Append("</div>")
+                .Append("</div></div></div>");
         }
 
-        html.Append("</div></div>");
-        html.Append("<script src='https://code.jquery.com/jquery-3.5.1.slim.min.js'></script>");
-        html.Append("<script src='https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js'></script>");
-        html.Append("<script src='https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js'></script>");
-        html.Append("</body></html>");
+        html.Append("</div>");
 
         return Results.Content(html.ToString(), "text/html");
     }
@@ -532,87 +558,105 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
     return Results.Content(htmlBuilder.ToString(), "text/html");
 });
 
-
-
-
-
-
-
-
-
-
 app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection) =>
 {
     var userId = context.Session.GetString("UserId");
-    if (string.IsNullOrEmpty(userId))
+    if (userId == null || !context.User.Identity.IsAuthenticated)
     {
         return Results.BadRequest("User not logged in");
     }
-
     var feeds = await dbConnection.QueryAsync<Feed>("SELECT Url FROM Feeds WHERE UserId = @UserId", new { UserId = userId });
     var tokens = antiforgery.GetAndStoreTokens(context);
-    context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
 
+    // Start of the list
     var htmlBuilder = new StringBuilder();
-    htmlBuilder.Append("<ul class='list-group'>");
+    htmlBuilder.Append("<ul class='list-group' id='feed-list'>");
+
+    // "All Feeds" row
+    htmlBuilder.AppendFormat(@"
+    <li class='list-group-item d-flex justify-content-between align-items-center feed-url'>
+        <span class='feed-url-text text-truncate'>All Feeds</span>
+        <div class='btn-group'>
+            <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/feeds' hx-target='#feeds' hx-swap='innerHTML'>View</button>
+        </div>
+    </li>", tokens.RequestToken);
+
+    // Individual feeds
     foreach (var feed in feeds)
     {
         htmlBuilder.AppendFormat(@"
-            <li class='list-group-item d-flex justify-content-between align-items-center feed-url' data-url='{0}'>
-                <span class='feed-url-text'>{0}</span>
-                <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-vals='{{""Url"":""{0}""}}' hx-target='closest li' hx-swap='outerHTML'>
+        <li class='list-group-item d-flex justify-content-between align-items-center feed-url' data-url='{0}'>
+            <span class='feed-url-text text-truncate' style='flex: 1;'>{0}</span>
+            <div class='btn-group' role='group'>
+                <button type='button' class='btn btn-primary btn-sm view-btn' hx-get='/getFeedData?url={0}' hx-target='#feeds' hx-swap='innerHTML'>View</button>
+                <button type='button' class='btn btn-secondary btn-sm share-btn'>Share</button>
+                <form hx-delete='/feeds' hx-confirm='Are you sure you want to delete this feed?' hx-vals='{{""Url"":""{0}""}}' hx-target='closest li' hx-swap='outerHTML' class='d-inline'>
                     <input type='hidden' name='__RequestVerificationToken' value='{1}' />
                     <button type='submit' class='btn btn-danger btn-sm delete-btn'>Delete</button>
                 </form>
-            </li>", feed.Url, tokens.RequestToken);
+            </div>
+        </li>", feed.Url, tokens.RequestToken);
     }
-    htmlBuilder.Append("</ul></div>");
-    htmlBuilder.AppendFormat(@"
-         <script>
-        document.getElementById('feed-list').addEventListener('click', function(e) {{
-            // Ignore clicks on the delete button
-            if (e.target.classList.contains('delete-btn')) {{
-                return;
-            }}
+    htmlBuilder.Append("</ul>");
 
-            // Handle feed URL selection
-            var feedUrlElement = e.target.closest('.feed-url');
-            if (feedUrlElement) {{
-                // Remove 'selected-feed' class from any previously selected URL
-                var selectedFeed = document.querySelector('.selected-feed');
-                if (selectedFeed) {{
-                    selectedFeed.classList.remove('selected-feed');
-                }}
-                // Add 'selected-feed' class to the clicked URL
-                feedUrlElement.classList.add('selected-feed');
+    // Adjusted script for handling row selection and highlighting
+    htmlBuilder.Append(@"
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const feedList = document.getElementById('feed-list');
+    if (!feedList) return; // Ensure feed-list exists
 
-                // Get the URL from the data-url attribute
-                var feedUrl = feedUrlElement.getAttribute('data-url');
+    feedList.addEventListener('click', function(e) {
+        // Ignore clicks on the delete button
+        if (e.target.classList.contains('delete-btn')) {
+            return;
+        }
 
-                // Use HTMX to send a request to /getFeedData with the selected URL
-                // and replace the content of the main HTML element
-                htmx.ajax('GET', '/getFeedData?url=' + encodeURIComponent(feedUrl), {{
-                    target: '#feeds',
-                    swap: 'outerHTML'
-                }});
-            }}
-        }});
-    </script>");
+        // Prevent default form submission
+        if (e.target.tagName === 'FORM' || e.target.closest('form')) {
+            e.preventDefault();
+        }
+
+        // Handle highlighting the row on view button click
+        if (e.target.classList.contains('view-btn')) {
+            // Remove 'selected-feed' class from any previously selected URL
+            document.querySelectorAll('.feed-url').forEach(function(element) {
+                element.classList.remove('selected-feed');
+            });
+
+            // Add 'selected-feed' class to the parent li of the clicked button
+            const feedUrlElement = e.target.closest('.feed-url');
+            feedUrlElement.classList.add('selected-feed');
+        }
+    });
+});
+</script>
+
+<style>
+.selected-feed {
+    background-color: #e0f7fa; /* Adjust the highlight color as needed */
+}
+.feed-url-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+</style>");
 
     return Results.Content(htmlBuilder.ToString(), "text/html");
 });
 
 app.MapDelete("/feeds", async (HttpContext context, IDbConnection dbConnection, IAntiforgery antiforgery) =>
 {
-    //try
-    //{
-    //    await antiforgery.ValidateRequestAsync(context);
-    //}
-    //catch (AntiforgeryValidationException)
-    //{
-    //    context.Response.StatusCode = 400;
-    //    return Results.Content("Invalid anti-forgery token.");
-    //}
+    try
+    {
+        await antiforgery.ValidateRequestAsync(context);
+    }
+    catch (AntiforgeryValidationException)
+    {
+        context.Response.StatusCode = 400;
+        return Results.Content("Invalid anti-forgery token.");
+    }
 
     var form = await context.Request.ReadFormAsync();
     var url = form["Url"].ToString();
