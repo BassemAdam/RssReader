@@ -286,7 +286,7 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
     return Results.Content(html, "text/html");
 });
 
-app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput, IAntiforgery antiforgery, IDbConnection connection) =>
+app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userinput,IAntiforgery antiforgery, IDbConnection connection) =>
 {
     try
     {
@@ -298,9 +298,9 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput
         return Results.Content("Invalid anti-forgery token.");
     }
 
-    var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userInput.email });
+    var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userinput.email });
 
-    if (user != null && BCrypt.Net.BCrypt.Verify(userInput.password, user.password))
+    if (user != null && BCrypt.Net.BCrypt.Verify(userinput.password, user.password))
     {
 
         var claims = new List<Claim>
@@ -329,19 +329,23 @@ app.MapPost("/login", async (HttpContext context, [FromForm] UserInput userInput
     }
 });
 
-app.MapPost("/logout", async (HttpContext context,IAntiforgery antiforgery) =>
-{
-    var tokens = antiforgery.GetAndStoreTokens(context);
-    context.Response.Headers["X-CSRF-TOKEN"] = tokens.RequestToken;
+//app.MapPost("/logout", async (HttpContext context,IAntiforgery antiforgery) =>
+//{
+//    context.Session.Clear();
+//    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
 
+//    var tokens = antiforgery.GetAndStoreTokens(context);
+
+//    var html = string.Format(loginHtml, tokens.RequestToken);
+//    return Results.Content(html, "text/html");
+ 
+//});
+app.MapPost("/logout", async (HttpContext context) =>
+{
     context.Session.Clear();
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-
-    var html = string.Format(loginHtml, tokens.RequestToken);
-    return Results.Content(html, "text/html");
- 
+    return Results.Redirect("/login-form");
 });
-
 app.MapPost("/feeds", async (HttpContext context, [FromForm] string Url ,IAntiforgery antiforgery ) =>
 {
     try
