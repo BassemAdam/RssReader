@@ -99,3 +99,9 @@ body {
     text-overflow: ellipsis;
 }
 
+.parsley-errors-list {
+    color: red;
+}
+.parsley-type {
+    color: red;
+}

@@ -19,6 +19,7 @@ using System.Xml;
 using System.ServiceModel.Syndication;
 using BCrypt.Net;
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Components.Forms;
 
 #region services
 var builder = WebApplication.CreateBuilder(args);
@@ -60,45 +61,48 @@ app.UseAntiforgery();
 var antiforgery = app.Services.GetRequiredService<IAntiforgery>();
 string DbPath = "Data Source=./wwwroot/RssReader.db";
 #endregion
-   
-#region HtmlTemplates 
-var loginHtml = """
-<div  id = "main" class= "col-lg-10 login-section">
-<div  class="container-fluid mt-3">
-    <div class="text-center">
-        <h4 class="mt-1 mb-5 pb-1">Feed Real</h4>
-    </div>
-    <div class="row justify-content-center">
-        <div class="col-12">
-            <div class="card">
-                <div class="row g-0">
-                    <div class="col-md-6">
-                        <div class="card-body">
-                            <h2 class="card-title text-center">Login</h2>
-                            <form id="login-section" hx-post="/login" hx-trigger="submit" hx-target="#main" hx-swap="outerHTML">
-                                <div class="form-outline mb-4">
-                                    <label class="form-label" for="form2Example11">Email</label>
-                                    <input type="email" id="form2Example11" class="form-control" name="email" required />
-                                </div>
-                                <div class="form-outline mb-4">
-                                    <label class="form-label" for="form2Example22">Password</label>
-                                    <input type="password" id="form2Example22" class="form-control" name="password" required />
-                                </div>
-                                <input type="hidden" name="__RequestVerificationToken" value="{0}" />
-                                <div class="text-center pt-1 mb-5 pb-1">
-                                    <button type="submit" class="btn btn-primary btn-block" style='background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);'>Log in</button>
-                                </div>
-                                <div class="d-flex align-items-center justify-content-center pb-4 ">
-                                    <p class="mb-0 me-2 m-2">Don't have an account?</p>
-                                    <button hx-get="/signup-form" hx-swap="innerHTML" hx-target="#main" type="button" class="btn btn-outline-primary">Create new</button>
-                                </div>
-                            </form>
+
+#region HTML templates
+var loginHtml = @"
+<div id=""main"" class=""col-lg-10 login-section"">
+    <div class=""container-fluid mt-3"">
+        <div class=""text-center"">
+            <h4 class=""mt-1 mb-5 pb-1"">Feed Real</h4>
+        </div>
+        <div class=""row justify-content-center"">
+            <div class=""col-12"">
+                <div class=""card"">
+                    <div class=""row g-0"">
+                        <div class=""col-md-6"">
+                            <div class=""card-body"">
+                                <h2 class=""card-title text-center"">Login</h2>
+                                <form id=""login-section"" hx-post=""/login"" hx-trigger=""submit"" hx-target=""#main"" hx-swap=""outerHTML"" data-parsley-validate>
+                                    <div class=""form-outline mb-4"">
+                                        <label class=""form-label"" for=""loginEmail"">Email</label>
+                                        <input type=""email"" id=""loginEmail"" class=""form-control"" name=""email"" required required data-parsley-trigger=""change"" data-parsley-required-message=""Email is required"" data-parsley-type-message=""Please enter a valid email address"" />
+                                        <div id=""loginEmailError"" class=""text-danger""></div>
+                                    </div>
+                                    <div class=""form-outline mb-4"">
+                                        <label class=""form-label"" for=""loginPassword"">Password</label>
+                                        <input type=""password"" id=""loginPassword"" class=""form-control"" name=""password"" required minlength=""8"" data-parsley-trigger=""change"" data-parsley-required-message=""Password is required"" />
+                                        <div id=""loginPasswordError"" class=""text-danger""></div>
+                                    </div>
+                                    <input type=""hidden"" name=""__RequestVerificationToken"" value=""{0}"" />
+                                    <div class=""text-center pt-1 mb-5 pb-1"">
+                                        <button type=""submit"" class=""btn btn-primary btn-block"" style=""background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);"">Log in</button>
+                                    </div>
+                                    <div class=""d-flex align-items-center justify-content-center pb-4"">
+                                        <p class=""mb-0 me-2 m-2"">Don't have an account?</p>
+                                        <button hx-get=""/signup-form"" hx-swap=""innerHTML"" hx-target=""#main"" type=""button"" class=""btn btn-outline-primary"">Create new</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
-                    </div>
-                    <div class="col-md-6 d-flex align-items-center" style="background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593); border-radius: 0.3rem;">
-                        <div class="text-white px-3 py-4 p-md-5 mx-md-4">
-                            <h4 class="mb-4">Escape the Algorithm & Embrace the Clarity of RSS</h4>
-                            <p class="small mb-0">In an age where social media algorithms dictate what we see, it's easy to become lost in a sea of targeted ads and manipulated content that aims to keep you engaging, not necessarily with important information or priorities, without you figuring it out. Break free from this cycle with RSS, a transparent and unbiased way to consume content. RSS feeds deliver the information you want, when you want it, without the interference of algorithms and ads. Join the movement to take back control of your media consumption and stay informed with pure, unfiltered content.</p>
+                        <div class=""col-md-6 d-flex align-items-center"" style=""background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593); border-radius: 0.3rem;"">
+                            <div class=""text-white px-3 py-4 p-md-5 mx-md-4"">
+                                <h4 class=""mb-4"">Escape the Algorithm & Embrace the Clarity of RSS</h4>
+                                <p class=""small mb-0"">In an age where social media algorithms dictate what we see, it's easy to become lost in a sea of targeted ads and manipulated content that aims to keep you engaging, not necessarily with important information or priorities, without you figuring it out. Break free from this cycle with RSS, a transparent and unbiased way to consume content. RSS feeds deliver the information you want, when you want it, without the interference of algorithms and ads. Join the movement to take back control of your media consumption and stay informed with pure, unfiltered content.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -106,44 +110,95 @@ var loginHtml = """
         </div>
     </div>
 </div>
-</ div >
-""";
+<script>
+document.body.addEventListener('htmx:afterOnLoad', function(event) {{
+    var xhr = event.detail.xhr; // The XMLHttpRequest object
+    var loginSection = document.getElementById('login-section');
 
-var signupHtml = """
-<div id="main" class="card">
-    <div class="card-body">
-        <div class="text-center">
-            <h4 class="mt-1 mb-5 pb-1">Feed Real</h4>
+    // Check for the custom header in the response
+    if (xhr.getResponseHeader('X-Login-Error')) {{
+        // If the header is present, insert an error message into the form
+        var errorDiv = document.createElement('div');
+        errorDiv.className = 'text-danger';
+        errorDiv.textContent = 'Invalid email or password';
+        
+        // Insert the error message at the top of the form or wherever you see fit
+        loginSection.insertBefore(errorDiv, loginSection.firstChild);
+    }}
+}});
+     $(document).ready(function() {{
+        // Initialize Parsley for the login form
+        $('#login-section').parsley().on('field:validated', function() {{
+            var ok = $('.parsley-error').length === 0;
+            $('#login-section button[type=""submit""]').attr('disabled', !ok);
+        }});
+    }});
+</script>
+";
+
+var signupHtml = @"
+<div id=""main"" class=""card"">
+    <div class=""card-body"">
+        <div class=""text-center"">
+            <h4 class=""mt-1 mb-5 pb-1"">Feed Real</h4>
         </div>
-        <div class="signup-header">
+        <div class=""signup-header"">
             <h2>Signup Form</h2>
         </div>
-        <form id='signup-section' hx-post='/signup' action='/signup' hx-vals='{{confirmPassword: null}}' hx-target='#response' hx-swap='innerHTML'>
-            <div data-mdb-input-init class='form-outline mb-4'>
-                <label class='form-label' for='form2Example11'>Email</label>
-                <input type='email' id='form2Example11' class='form-control' name='email' />
+        <form id=""signup-section"" hx-post=""/signup"" action=""/signup"" hx-vals=""{{confirmPassword: null}}"" hx-target=""#response"" hx-swap=""innerHTML"" data-parsley-validate>
+            <div data-mdb-input-init class=""form-outline mb-4"">
+                <label class=""form-label"" for=""signupEmail"">Email</label>
+                <input type=""email"" id=""signupEmail"" class=""form-control"" name=""email"" required data-parsley-trigger=""change"" data-parsley-required-message=""Email is required"" data-parsley-type-message=""Please enter a valid email address""/>
+                <div id=""signupEmailError"" class=""text-danger""></div>
             </div>
-            <input type='hidden' name='__RequestVerificationToken' value='{0}' />
-            <div data-mdb-input-init class='form-outline mb-4'>
-                <label class='form-label' for='form2Example22'>Password</label>
-                <input type='password' id='form2Example22' class='form-control' name='password' />
+            <input type=""hidden"" name=""__RequestVerificationToken"" value=""{0}"" />
+            <div data-mdb-input-init class=""form-outline mb-4"">
+                <label class=""form-label"" for=""signupPassword"">Password</label>
+                <input type=""password"" id=""signupPassword"" class=""form-control"" name=""password"" required minlength=""8"" data-parsley-trigger=""change"" data-parsley-required-message=""password is required"" />
+                <div id=""signupPasswordError"" class=""text-danger""></div>
             </div>
-            <div data-mdb-input-init class='form-outline mb-4'>
-                <label class='form-label' for='form2Example33'>Confirm Password</label>
-                <input type='password' id='form2Example33' class='form-control' name='confirmPassword' />
+            <div data-mdb-input-init class=""form-outline mb-4"">
+                <label class=""form-label"" for=""confirmPassword"">Confirm Password</label>
+                <input type=""password"" id=""confirmPassword"" class=""form-control"" name=""confirmPassword"" required data-parsley-equalto=""#signupPassword"" data-parsley-trigger=""change"" data-parsley-required-message=""password is required""/>
+                <div id=""confirmPasswordError"" class=""text-danger""></div>
             </div>
-            <div class='text-center pt-1 mb-5 pb-1'>
-                <button type='submit' data-mdb-button-init data-mdb-ripple-init class='btn btn-primary btn-block fa-lg mb-3' style='background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);'>Sign Up</button>
+            <div class=""text-center pt-1 mb-5 pb-1"">
+                <button type=""submit"" data-mdb-button-init data-mdb-ripple-init class=""btn btn-primary btn-block fa-lg mb-3"" style=""background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);"" disabled>Sign Up</button>
             </div>
-            <div id='response'></div>
-            <div class='d-flex align-items-center justify-content-center pb-4'>
-                <p class='mb-0 me-2 mr-2'>Already have an account?</p>
-                <button hx-get='/login-form' hx-swap='outerHTML' hx-target='#main' type='button' data-mdb-button-init data-mdb-ripple-init class='btn btn-outline-primary'>Log in</button>
+            <div id=""response""></div>
+            <div class=""d-flex align-items-center justify-content-center pb-4"">
+                <p class=""mb-0 me-2 mr-2"">Already have an account?</p>
+                <button hx-get=""/login-form"" hx-swap=""outerHTML"" hx-target=""#main"" type=""button"" data-mdb-button-init data-mdb-ripple-init class=""btn btn-outline-primary"">Log in</button>
             </div>
         </form>
     </div>
 </div>
-""";
+<script>
+     $(document).ready(function() {{
+        // Function to update the submit button state
+        function updateSubmitButtonState() {{
+            var formIsValid = $('#signup-section').parsley().isValid();
+            $('#signup-section button[type=""submit""]').attr('disabled', !formIsValid);
+        }}
+
+        // Initialize Parsley for the signup form
+        $('#signup-section').parsley();
+
+        // Listen for any field being validated
+        $('#signup-section').parsley().on('field:validated', function() {{
+            updateSubmitButtonState();
+        }});
+
+        // Optionally, listen for the form validation event if you need to handle form-wide validation
+        $('#signup-section').parsley().on('form:validated', function() {{
+            updateSubmitButtonState();
+        }});
+
+        // Initial update in case the form is pre-filled with valid data
+        updateSubmitButtonState();
+    }});
+</script>
+";
 
 var feedPageHtml = @"
     <div id='main'>
@@ -328,24 +383,12 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
     var html1 = string.Format(loginHtml, tokens1.RequestToken);
     return Results.Content(html1, "text/html");
 });
-
-app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] UserInput userinput,IAntiforgery antiforgery, IDbConnection connection) =>
+app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] UserInput userinput, IAntiforgery antiforgery, IDbConnection connection) =>
 {
-    //try
-    //{
-    //    await antiforgery.ValidateRequestAsync(context);
-    //}
-    //catch (AntiforgeryValidationException)
-    //{
-    //    context.Response.StatusCode = 400;
-    //    return Results.Content("Invalid anti-forgery token.");
-    //}
-
     var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userinput.email });
 
     if (user != null && BCrypt.Net.BCrypt.Verify(userinput.password, user.password))
     {
-
         var claims = new List<Claim>
         {
             new Claim(ClaimTypes.Name, user.email),
@@ -358,20 +401,18 @@ app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
             AllowRefresh = true
         };
 
-  
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
         context.Session.SetString("UserId", user.id.ToString());
-
         return Results.Redirect("/login-form");
-        //var tokens = antiforgery.GetAndStoreTokens(context);
-        //var html = string.Format(feedPageHtml, tokens.RequestToken);
-        //return Results.Content(html, "text/html");
+       // context.Response.Headers.Add("HX-Redirect", "/login-form");
+       // return Results.Ok();
     }
     else
     {
-        return Results.Content("Invalid email or password", "text/html");
+        return Results.Content("Invalid email or password", "text/plain");
     }
 });
+
 
 app.MapPost("/logout", async (HttpContext context) =>
 {
