@@ -76,7 +76,7 @@ var loginHtml = @"
                         <div class=""col-md-6"">
                             <div class=""card-body"">
                                 <h2 class=""card-title text-center"">Login</h2>
-                                <form id=""login-section"" hx-post=""/login"" hx-trigger=""submit"" hx-target=""#main"" hx-swap=""outerHTML"" data-parsley-validate>
+                                <form id=""login-section"" hx-post=""/login"" hx-trigger=""submit"" hx-target=""#main"" hx-boost=""true"" hx-swap=""outerHTML"" data-parsley-validate>
                                     <div class=""form-outline mb-4"">
                                         <label class=""form-label"" for=""loginEmail"">Email</label>
                                         <input type=""email"" id=""loginEmail"" class=""form-control"" name=""email"" required required data-parsley-trigger=""change"" data-parsley-required-message=""Email is required"" data-parsley-type-message=""Please enter a valid email address"" />
@@ -91,12 +91,14 @@ var loginHtml = @"
                                     <div class=""text-center pt-1 mb-5 pb-1"">
                                         <button type=""submit"" class=""btn btn-primary btn-block"" style=""background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593);"">Log in</button>
                                     </div>
+                                    <div id=""loginError"" ></div>
                                     <div class=""d-flex align-items-center justify-content-center pb-4"">
                                         <p class=""mb-0 me-2 m-2"">Don't have an account?</p>
                                         <button hx-get=""/signup-form"" hx-swap=""innerHTML"" hx-target=""#main"" type=""button"" class=""btn btn-outline-primary"">Create new</button>
                                     </div>
                                 </form>
                             </div>
+                              
                         </div>
                         <div class=""col-md-6 d-flex align-items-center"" style=""background: linear-gradient(to right, #ee7724, #d8363a, #dd3675, #b44593); border-radius: 0.3rem;"">
                             <div class=""text-white px-3 py-4 p-md-5 mx-md-4"">
@@ -111,27 +113,37 @@ var loginHtml = @"
     </div>
 </div>
 <script>
-document.body.addEventListener('htmx:afterOnLoad', function(event) {{
-    var xhr = event.detail.xhr; // The XMLHttpRequest object
-    var loginSection = document.getElementById('login-section');
-
-    // Check for the custom header in the response
-    if (xhr.getResponseHeader('X-Login-Error')) {{
-        // If the header is present, insert an error message into the form
-        var errorDiv = document.createElement('div');
-        errorDiv.className = 'text-danger';
-        errorDiv.textContent = 'Invalid email or password';
-        
-        // Insert the error message at the top of the form or wherever you see fit
-        loginSection.insertBefore(errorDiv, loginSection.firstChild);
-    }}
-}});
      $(document).ready(function() {{
-        // Initialize Parsley for the login form
-        $('#login-section').parsley().on('field:validated', function() {{
-            var ok = $('.parsley-error').length === 0;
-            $('#login-section button[type=""submit""]').attr('disabled', !ok);
-        }});
+         // Initially disable the login button
+         $('#login-section button[type=""submit""]').attr('disabled', true);
+
+         // Initialize Parsley for the login form
+         $('#login-section').parsley().on('field:validated', function() {{
+             // Check if the form is valid
+             var ok = $('.parsley-error').length === 0 && $('#login-section').parsley().isValid();
+             // Enable or disable the login button based on the form validity
+             $('#login-section button[type=""submit""]').attr('disabled', !ok);
+         }}).on('form:submit', function() {{
+             // Prevent the form submission if you need to do something else here
+             return true; // Return false to prevent the form submission
+         }});
+     }});
+ document.body.addEventListener('htmx:afterRequest', function(event) {{
+        if (event.detail.xhr.status === 400) {{
+            // If the response status code is 400, adjust the target for the error message
+            var loginErrorDiv = document.getElementById('loginError');
+            loginErrorDiv.innerHTML = event.detail.xhr.responseText;
+        }}
+    }});
+   document.body.addEventListener('htmx:afterOnLoad', function(event) {{
+        // Check if the loaded content contains an alert
+        var alertDiv = document.getElementById('loginError1');
+        if (alertDiv) {{
+            // Hide the alert after 3 seconds (3000 milliseconds)
+            setTimeout(function() {{
+                alertDiv.style.display = 'none';
+            }}, 3000);
+        }}
     }});
 </script>
 ";
@@ -409,8 +421,12 @@ app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
     }
     else
     {
-        return Results.Content("Invalid email or password", "text/plain");
+        context.Response.StatusCode = 400; // Client-side error
+        context.Response.ContentType = "text/plain";
+        return Results.Content("<div id=\"loginError1\" class=\"alert alert-danger\" role=\"alert\">Invalid email or password</div>", "text/html");
+
     }
+
 });
 
 
