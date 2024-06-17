@@ -232,9 +232,11 @@ var feedPageHtml = @"
                         <button type='submit' class='btn btn-primary m-3'>Add Feed</button>
                         <div id='responseMessage'></div>
                     </form>
-                <form id=""generate-share-link-form"" class=""mb-4"" onsubmit=""return false;"">
-                    <button type=""submit"" class=""btn btn-primary"" onclick=""generateAndCopyLink()"">Generate Shareable Link</button>
-                </form>
+               <div class='d-flex justify-content-center align-items-center'>
+                    <form id=""generate-share-link-form"" class=""mb-4"" onsubmit=""return false;"">
+                        <button type=""submit"" class=""btn btn-primary"" onclick=""generateAndCopyLink()"">Generate Shareable Link</button>
+                    </form>
+                </div>
                 <div id=""share-link-container""></div>
                     <div class='p-3'>
                         <h5>Select a feed to display on the page</h5>
@@ -818,7 +820,25 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
     }
 
     var html = new StringBuilder();
-    html.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
+    html.Append("<!DOCTYPE html>")
+        .Append("<html lang='en'>")
+        .Append("<head>")
+        .Append("<meta charset='UTF-8'>")
+        .Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>")
+        .Append("<title>Shared Feeds</title>")
+        .Append("<link href='https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css' rel='stylesheet'>")
+         .Append("<style>")
+        .Append(".card { flex: 1 0 100%; max-width: 100%; }")
+        .Append(".rtl { direction: rtl; text-align: right; }")
+        .Append(".video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }")
+        .Append(".video-container iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }")
+        .Append(".feed-url-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }")
+        .Append("</style>")
+        .Append("</head>")
+        .Append("<body>")
+        .Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
+
+    // Add a header for shared feeds with a generic title
     html.Append("<div class='row mb-4 justify-content-center'>")
         .Append("<div class='col-12 col-md-10 col-lg-8'>")
         .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>Shared Feeds</h1>")
@@ -830,8 +850,8 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
         bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
         var cardClass = isRtlContent ? "card rtl" : "card";
 
-        html.Append($"<div class='row mb-4 justify-content-center'>")
-           .Append($"<div class='col-12 col-md-10 col-lg-8'>")
+        html.Append("<div class='row mb-4 justify-content-center'>")
+           .Append("<div class='col-12 col-md-10 col-lg-8'>")
            .Append($"<div class='{cardClass}' style='word-wrap: break-word;'>");
 
         if (item.Title != null)
@@ -843,17 +863,30 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
 
         html.Append("<div class='card-body'>");
 
+        // Ensure images within the description are responsive
         var description = item.Summary?.Text ?? string.Empty;
         description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
 
         html.Append("<p class='card-text'>").Append(description).Append("</p>");
         html.Append("</div>");
+
+        // Card footer with flexbox for responsive alignment
         html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
 
         if (item.PublishDate != null)
         {
-            string formattedDate = item.PublishDate.ToLocalTime().ToString("f");
+            string formattedDate;
+            try
+            {
+                var publishDate = item.PublishDate.ToLocalTime(); // Convert to local time
+                formattedDate = publishDate.ToString("f"); // Full (long) date and time pattern
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                formattedDate = "Unknown"; // Handle invalid date gracefully
+            }
+
             html.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
                 .Append("Published on: ").Append(formattedDate)
                 .Append("</div>");
@@ -870,11 +903,15 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
             .Append("</div></div></div>");
     }
 
-    html.Append("</div>");
+    html.Append("</div>")
+        .Append("<script src='https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js'></script>")
+        .Append("<script src='https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js'></script>")
+        .Append("<script src='https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js'></script>")
+        .Append("</body>")
+        .Append("</html>");
 
     return Results.Content(html.ToString(), "text/html");
 });
-
 
 #endregion
 
