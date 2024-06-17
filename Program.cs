@@ -20,6 +20,7 @@ using System.ServiceModel.Syndication;
 using BCrypt.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Components.Forms;
+using System.Text.Json;
 
 #region services
 var builder = WebApplication.CreateBuilder(args);
@@ -231,6 +232,10 @@ var feedPageHtml = @"
                         <button type='submit' class='btn btn-primary m-3'>Add Feed</button>
                         <div id='responseMessage'></div>
                     </form>
+                <form id=""generate-share-link-form"" class=""mb-4"" onsubmit=""return false;"">
+                    <button type=""submit"" class=""btn btn-primary"" onclick=""generateAndCopyLink()"">Generate Shareable Link</button>
+                </form>
+                <div id=""share-link-container""></div>
                     <div class='p-3'>
                         <h5>Select a feed to display on the page</h5>
                     </div>
@@ -272,6 +277,27 @@ var feedPageHtml = @"
             e.target.classList.add('selected');
         }}
     }});
+function generateAndCopyLink() {{
+    fetch('/generate-share-link', {{
+        method: 'POST',
+        headers: {{
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }},
+        // Include any necessary data in the body or headers, such as CSRF tokens
+    }})
+    .then(response => response.text()) // Assuming the server returns the link as plain text
+    .then(link => {{
+        navigator.clipboard.writeText(link).then(() => {{
+            const expirationDate = new Date();
+            expirationDate.setDate(expirationDate.getDate() + 7);
+            alert(`Share link copied to clipboard. The link will expire on ${{expirationDate.toLocaleDateString()}}.`);
+        }}).catch(err => {{
+            console.error('Could not copy text: ', err);
+        }});
+    }})
+    .catch(error => console.error('Error generating share link:', error));
+}}
     </script>
     ";
 #endregion
@@ -395,6 +421,7 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
     var html1 = string.Format(loginHtml, tokens1.RequestToken);
     return Results.Content(html1, "text/html");
 });
+
 app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] UserInput userinput, IAntiforgery antiforgery, IDbConnection connection) =>
 {
     var user = await connection.QuerySingleOrDefaultAsync<User>("SELECT * FROM Users WHERE email = @Email", new { Email = userinput.email });
@@ -428,7 +455,6 @@ app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
     }
 
 });
-
 
 app.MapPost("/logout", async (HttpContext context) =>
 {
@@ -744,6 +770,112 @@ app.MapDelete("/feeds", async (HttpContext context, IDbConnection dbConnection, 
     await dbConnection.ExecuteAsync("DELETE FROM Feeds WHERE Url = @Url AND UserId = @UserId", new { Url = url, UserId = userId });
     return Results.Ok();
 });
+
+app.MapPost("/generate-share-link", async (HttpContext context, IDbConnection connection) =>
+{
+    var userEmail = context.User.Identity.Name;
+    if (string.IsNullOrEmpty(userEmail))
+        return Results.Unauthorized();
+
+    using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
+    {
+        var user = await dbConnection.QueryFirstOrDefaultAsync<User>("SELECT * FROM Users WHERE Email = @Email", new { Email = userEmail });
+        if (user == null) return Results.NotFound("User not found");
+
+        // Generate a unique token
+        var shareToken = Guid.NewGuid().ToString();
+
+        // Set an expiration date for the link (e.g., 7 days from now)
+        var expirationDate = DateTime.UtcNow.AddDays(7);
+
+        // Save the shared link data in the database
+        await dbConnection.ExecuteAsync("INSERT INTO SharedLinks (UserId, Token, ExpirationDate) VALUES (@UserId, @Token, @ExpirationDate)",
+            new { UserId = user.id, Token = shareToken, ExpirationDate = expirationDate });
+
+        var shareLink = $"{context.Request.Scheme}://{context.Request.Host}/shared-feeds/{shareToken}";
+        return Results.Content(shareLink, "text/plain");
+    }
+});
+
+app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection dbConnection, string token) =>
+{
+    var sharedLink = await dbConnection.QueryFirstOrDefaultAsync<SharedLink>(
+        "SELECT * FROM SharedLinks WHERE Token = @Token AND ExpirationDate > @Now",
+        new { Token = token, Now = DateTime.UtcNow });
+
+    if (sharedLink == null) return Results.NotFound("Shared feeds not found or link has expired");
+
+    var feeds = await dbConnection.QueryAsync<Feed>(
+        "SELECT * FROM Feeds WHERE UserId = @UserId",
+        new { UserId = sharedLink.UserId });
+
+    var feedItems = new List<SyndicationItem>();
+    foreach (var feed in feeds)
+    {
+        using var reader = XmlReader.Create(feed.Url);
+        var syndicationFeed = SyndicationFeed.Load(reader);
+        feedItems.AddRange(syndicationFeed.Items);
+    }
+
+    var html = new StringBuilder();
+    html.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
+    html.Append("<div class='row mb-4 justify-content-center'>")
+        .Append("<div class='col-12 col-md-10 col-lg-8'>")
+        .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>Shared Feeds</h1>")
+        .Append("</div>")
+        .Append("</div>");
+
+    foreach (var item in feedItems)
+    {
+        bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
+        var cardClass = isRtlContent ? "card rtl" : "card";
+
+        html.Append($"<div class='row mb-4 justify-content-center'>")
+           .Append($"<div class='col-12 col-md-10 col-lg-8'>")
+           .Append($"<div class='{cardClass}' style='word-wrap: break-word;'>");
+
+        if (item.Title != null)
+        {
+            html.Append("<div class='card-header'>")
+                .Append("<h5 class='card-title font-weight-bold text-center' style='font-size: 1.25rem;'>").Append(item.Title.Text).Append("</h5>")
+                .Append("</div>");
+        }
+
+        html.Append("<div class='card-body'>");
+
+        var description = item.Summary?.Text ?? string.Empty;
+        description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
+
+        html.Append("<p class='card-text'>").Append(description).Append("</p>");
+        html.Append("</div>");
+        html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
+
+        if (item.PublishDate != null)
+        {
+            string formattedDate = item.PublishDate.ToLocalTime().ToString("f");
+            html.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
+                .Append("Published on: ").Append(formattedDate)
+                .Append("</div>");
+        }
+
+        if (item.Links.Any())
+        {
+            html.Append("<div class='col-12 col-md-auto text-center text-md-right'>")
+                .Append("<a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary mt-2 mt-md-0'>Read more</a>")
+                .Append("</div>");
+        }
+
+        html.Append("</div>")
+            .Append("</div></div></div>");
+    }
+
+    html.Append("</div>");
+
+    return Results.Content(html.ToString(), "text/html");
+});
+
+
 #endregion
 
 app.Run();
