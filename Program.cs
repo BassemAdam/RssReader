@@ -25,7 +25,6 @@ using System.Text.Json;
 #region services
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("RssReaderDb");
-
 builder.Services.AddScoped<IDbConnection>(sp => new SqliteConnection(connectionString));
 builder.Services.AddDistributedMemoryCache();
 builder.Services.AddSession(options =>
@@ -41,9 +40,9 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.LogoutPath = "/logout";
         options.ExpireTimeSpan = TimeSpan.FromMinutes(30);
         options.SlidingExpiration = true;
-        options.Cookie.HttpOnly = true; // Make the cookie inaccessible to JavaScript
-        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // Ensure the cookie is only sent over HTTPS
-        options.Cookie.SameSite = SameSiteMode.Strict; // Prevent the browser from sending this cookie along with cross-site requests
+        options.Cookie.HttpOnly = true; 
+        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; 
+        options.Cookie.SameSite = SameSiteMode.Strict; 
     });
 builder.Services.AddAuthorization();
 builder.Services.AddAntiforgery();
@@ -60,7 +59,6 @@ app.UseAntiforgery();
 
 #region Initializion 
 var antiforgery = app.Services.GetRequiredService<IAntiforgery>();
-string DbPath = "Data Source=./wwwroot/RssReader.db";
 #endregion
 
 #region HTML templates
@@ -115,32 +113,23 @@ var loginHtml = @"
 </div>
 <script>
      $(document).ready(function() {{
-         // Initially disable the login button
          $('#login-section button[type=""submit""]').attr('disabled', true);
-
-         // Initialize Parsley for the login form
          $('#login-section').parsley().on('field:validated', function() {{
-             // Check if the form is valid
              var ok = $('.parsley-error').length === 0 && $('#login-section').parsley().isValid();
-             // Enable or disable the login button based on the form validity
              $('#login-section button[type=""submit""]').attr('disabled', !ok);
          }}).on('form:submit', function() {{
-             // Prevent the form submission if you need to do something else here
-             return true; // Return false to prevent the form submission
+             return true; 
          }});
      }});
  document.body.addEventListener('htmx:afterRequest', function(event) {{
         if (event.detail.xhr.status === 400) {{
-            // If the response status code is 400, adjust the target for the error message
             var loginErrorDiv = document.getElementById('loginError');
             loginErrorDiv.innerHTML = event.detail.xhr.responseText;
         }}
     }});
    document.body.addEventListener('htmx:afterOnLoad', function(event) {{
-        // Check if the loaded content contains an alert
         var alertDiv = document.getElementById('loginError1');
         if (alertDiv) {{
-            // Hide the alert after 3 seconds (3000 milliseconds)
             setTimeout(function() {{
                 alertDiv.style.display = 'none';
             }}, 3000);
@@ -188,26 +177,17 @@ var signupHtml = @"
 </div>
 <script>
      $(document).ready(function() {{
-        // Function to update the submit button state
         function updateSubmitButtonState() {{
             var formIsValid = $('#signup-section').parsley().isValid();
             $('#signup-section button[type=""submit""]').attr('disabled', !formIsValid);
         }}
-
-        // Initialize Parsley for the signup form
         $('#signup-section').parsley();
-
-        // Listen for any field being validated
         $('#signup-section').parsley().on('field:validated', function() {{
             updateSubmitButtonState();
         }});
-
-        // Optionally, listen for the form validation event if you need to handle form-wide validation
         $('#signup-section').parsley().on('form:validated', function() {{
             updateSubmitButtonState();
         }});
-
-        // Initial update in case the form is pre-filled with valid data
         updateSubmitButtonState();
     }});
 </script>
@@ -217,7 +197,6 @@ var feedPageHtml = @"
     <div id='main'>
         <div class='container-fluid'>
             <div class='row'>
-                <!-- Sidebar -->
                 <div id='sidebar' class='bg-light border-right open'>
                     <div class='sidebar-heading p-3'>
                         Feed Real
@@ -227,14 +206,12 @@ var feedPageHtml = @"
                         <input type='hidden' name='__RequestVerificationToken' value='{0}' />
                         <div class='mb-3 p-3'>
                             <label for='feedUrl' class='form-label'>Feed URL</label>
-                            <!-- Updated pattern to enforce URLs that end with .xml -->
                             <input type='text' class='form-control' id='feedUrl' name='Url' required pattern=""https?://.*\.xml$"">
                             <div id='feedUrlError' class='text-danger'></div>
                         </div>
                         <button type='submit' class='btn btn-primary m-3' id='addFeedButton'>Add Feed</button>
                         <div id='responseMessage'></div>
                     </form>
-                    
                <div class='d-flex justify-content-center align-items-center'>
                     <form id=""generate-share-link-form"" class=""mb-4"" onsubmit=""return false;"">
                         <button type=""submit"" class=""btn btn-primary"" onclick=""generateAndCopyLink()"">Generate Shareable Link</button>
@@ -245,13 +222,10 @@ var feedPageHtml = @"
                         <h5>Select a feed to display on the page</h5>
                     </div>
                     <div id='feed-list' hx-get='/feeds-urls' hx-trigger='load' class='p-3'>
-                        <!-- List of feeds will be dynamically loaded here -->
                     </div>
                 </div>
-                <!-- Main content -->
                 <div class='col p-3 col-expanded' style='transition: margin-left 0.5s;'>
                     <div id='feeds'>
-                        <!-- The feeds will be loaded here -->
                     </div>
                 </div>
             </div>
@@ -282,56 +256,52 @@ var feedPageHtml = @"
             e.target.classList.add('selected');
         }}
     }});
-function generateAndCopyLink() {{
-    fetch('/generate-share-link', {{
-        method: 'POST',
-        headers: {{
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
-        }},
-        // Include any necessary data in the body or headers, such as CSRF tokens
-    }})
-    .then(response => response.text()) // Assuming the server returns the link as plain text
-    .then(link => {{
-        navigator.clipboard.writeText(link).then(() => {{
-            const expirationDate = new Date();
-            expirationDate.setDate(expirationDate.getDate() + 7);
-            alert(`Share link copied to clipboard. The link will expire on ${{expirationDate.toLocaleDateString()}}.`);
-        }}).catch(err => {{
-            console.error('Could not copy text: ', err);
-        }});
-    }})
-    .catch(error => console.error('Error generating share link:', error));
-}}
-document.addEventListener('DOMContentLoaded', function() {{
-    const feedUrlInput = document.getElementById('feedUrl');
-    const addFeedButton = document.getElementById('addFeedButton');
-    const feedUrlError = document.getElementById('feedUrlError');
-
-    function validateFeedUrl() {{
-        if (!feedUrlInput.checkValidity()) {{
-            if(feedUrlInput.validity.patternMismatch) {{
-                feedUrlError.textContent = 'Please enter a valid RSS feed URL that ends with .xml.';
-            }} else if(feedUrlInput.validity.valueMissing) {{
-                feedUrlError.textContent = 'This field is required.';
-            }} else {{
-                feedUrlError.textContent = 'Invalid input.';
-            }}
-            addFeedButton.disabled = true;
-        }} else {{
-            feedUrlError.textContent = '';
-            addFeedButton.disabled = false;
-        }}
+    function generateAndCopyLink() {{
+        fetch('/generate-share-link', {{
+            method: 'POST',
+            headers: {{
+                'Content-Type': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }},
+        }})
+        .then(response => response.text()) 
+        .then(link => {{
+            navigator.clipboard.writeText(link).then(() => {{
+                const expirationDate = new Date();
+                expirationDate.setDate(expirationDate.getDate() + 7);
+                alert(`Share link copied to clipboard. The link will expire on ${{expirationDate.toLocaleDateString()}}.`);
+            }}).catch(err => {{
+                console.error('Could not copy text: ', err);
+            }});
+        }})
+        .catch(error => console.error('Error generating share link:', error));
     }}
+    document.addEventListener('DOMContentLoaded', function() {{
+        const feedUrlInput = document.getElementById('feedUrl');
+        const addFeedButton = document.getElementById('addFeedButton');
+        const feedUrlError = document.getElementById('feedUrlError');
+
+        function validateFeedUrl() {{
+            if (!feedUrlInput.checkValidity()) {{
+                if(feedUrlInput.validity.patternMismatch) {{
+                    feedUrlError.textContent = 'Please enter a valid RSS feed URL that ends with .xml.';
+                }} else if(feedUrlInput.validity.valueMissing) {{
+                    feedUrlError.textContent = 'This field is required.';
+                }} else {{
+                    feedUrlError.textContent = 'Invalid input.';
+                }}
+                addFeedButton.disabled = true;
+            }} else {{
+                feedUrlError.textContent = '';
+                addFeedButton.disabled = false;
+            }}
+        }}
 
     feedUrlInput.addEventListener('input', validateFeedUrl);
-
-    // Initial validation in case the form is pre-filled with invalid data
     validateFeedUrl();
-}});
+    }});
     </script>
     ";
-
 #endregion
 
 #region Utility Methods
@@ -342,9 +312,6 @@ static bool IsRtlContent(string text)
         return false;
     }
 
-    // Unicode ranges for RTL scripts
-    // Arabic: 0600–06FF, Hebrew: 0590–05FF, etc.
-    // You can add more ranges as needed
     int[][] rtlRanges = new int[][]
     {
         new int[] { 0x0590, 0x05FF }, // Hebrew
@@ -416,8 +383,6 @@ app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInpu
 
 app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, IDbConnection connection) =>
 {
-    // Check if the user is already authenticated
-   
     if (context.User.Identity.IsAuthenticated)
     {
         var email = context.User.Identity.Name;
@@ -425,30 +390,13 @@ app.MapGet("/login-form", async (IAntiforgery antiforgery, HttpContext context, 
 
         if (user != null)
         {
-        //    var claims = new List<Claim>
-        //{
-        //    new Claim(ClaimTypes.Name, user.email),
-        //    new Claim(ClaimTypes.NameIdentifier, user.id.ToString()),
-        //};
-        //    var claimsIdentity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-        //    var authProperties = new AuthenticationProperties
-        //    {
-        //        IsPersistent = true,
-        //        AllowRefresh = true
-        //    };
-
-
-        //    await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
            context.Session.SetString("UserId", user.id.ToString());
 
             var tokens = antiforgery.GetAndStoreTokens(context);
             var html = string.Format(feedPageHtml, tokens.RequestToken);
             return Results.Content(html, "text/html");
-
         }
     }
-
-    // User is not authenticated, return login form
     var tokens1 = antiforgery.GetAndStoreTokens(context);
     var html1 = string.Format(loginHtml, tokens1.RequestToken);
     return Results.Content(html1, "text/html");
@@ -475,15 +423,12 @@ app.MapPost("/login", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
         await context.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(claimsIdentity), authProperties);
         context.Session.SetString("UserId", user.id.ToString());
         return Results.Redirect("/login-form");
-       // context.Response.Headers.Add("HX-Redirect", "/login-form");
-       // return Results.Ok();
     }
     else
     {
-        context.Response.StatusCode = 400; // Client-side error
+        context.Response.StatusCode = 400; 
         context.Response.ContentType = "text/plain";
         return Results.Content("<div id=\"loginError1\" class=\"alert alert-danger\" role=\"alert\">Invalid email or password</div>", "text/html");
-
     }
 
 });
@@ -497,15 +442,6 @@ app.MapPost("/logout", async (HttpContext context) =>
 
 app.MapPost("/feeds", [ValidateAntiForgeryToken] async (HttpContext context, [FromForm] Feed feed ,IAntiforgery antiforgery ) =>
 {
-    //try
-    //{
-    //    await antiforgery.ValidateRequestAsync(context);
-    //}
-    //catch (AntiforgeryValidationException)
-    //{
-    //    context.Response.StatusCode = 400;
-    //    return Results.Content("Invalid anti-forgery token.");
-    //}
     var userId = context.Session.GetString("UserId");
     if (string.IsNullOrEmpty(userId)) return Results.BadRequest("User not logged in");
     using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
@@ -515,23 +451,10 @@ app.MapPost("/feeds", [ValidateAntiForgeryToken] async (HttpContext context, [Fr
         await dbConnection.ExecuteAsync("INSERT INTO Feeds (Url, UserId) VALUES (@Url, @UserId)", new { feed.Url, UserId = userId });
     }
     return Results.Redirect("/feeds-urls");
-
-    var successMessageHtml = @"
-    <div id=""success-message"" class='alert alert-success' role='alert'>
-      Feed URL has been added successfully!
-    </div>
-    <script>
-        setTimeout(function() {{
-            document.getElementById('success-message').style.display = 'none';
-        }}, 3000); 
-    </script>";
-
-    return Results.Content(successMessageHtml, "text/html");
 });
 
 app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 {
-
     var email = context.User.Identity.Name;
     using (var dbConnection = new SqliteConnection("Data Source=./wwwroot/RssReader.db"))
     {
@@ -552,7 +475,7 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
         var html = new StringBuilder();
         html.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
 
-        // Add a header for all feeds with a generic title
+       
         html.Append("<div class='row mb-4 justify-content-center'>")
             .Append("<div class='col-12 col-md-10 col-lg-8'>")
             .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>All Feeds</h1>")
@@ -561,7 +484,7 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 
         foreach (var item in feedItems)
         {
-            bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
+            bool isRtlContent = IsRtlContent(item.Summary.Text); 
 
             var cardClass = isRtlContent ? "card rtl" : "card";
             html.Append($"<div class='row mb-4 justify-content-center'>")
@@ -577,53 +500,39 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
 
             html.Append("<div class='card-body'>");
 
-            // Ensure images within the description are responsive
             var description = item.Summary?.Text ?? string.Empty;
-            //var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
-           // html.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
-
-           
             description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-            // Making images responsive
             description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
 
             html.Append("<p class='card-text'>").Append(description).Append("</p>");
             html.Append("</div>");
-            // Card footer with flexbox for responsive alignment
             html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
-
             if (item.PublishDate != null)
             {
                 string formattedDate;
                 try
                 {
-                    var publishDate = item.PublishDate.ToLocalTime(); // Convert to local time
-                    formattedDate = publishDate.ToString("f"); // Full (long) date and time pattern
+                    var publishDate = item.PublishDate.ToLocalTime(); 
+                    formattedDate = publishDate.ToString("f"); 
                 }
                 catch (ArgumentOutOfRangeException)
                 {
-                    formattedDate = "Unknown"; // Handle invalid date gracefully
+                    formattedDate = "Unknown"; 
                 }
-
                 html.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
                     .Append("Published on: ").Append(formattedDate)
                     .Append("</div>");
             }
-
             if (item.Links.Any())
             {
                 html.Append("<div class='col-12 col-md-auto text-center text-md-right'>")
                     .Append("<a href='").Append(item.Links.First().Uri.ToString()).Append("' class='btn btn-primary mt-2 mt-md-0'>Read more</a>")
                     .Append("</div>");
             }
-
             html.Append("</div>")
                 .Append("</div></div></div>");
         }
-
         html.Append("</div>");
-
         return Results.Content(html.ToString(), "text/html");
     }
 });
@@ -651,11 +560,10 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
     var htmlBuilder = new StringBuilder();
     htmlBuilder.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
 
-    // Add a header for all feeds with the channel name
     if (syndicationFeed.Title != null)
     {
-        htmlBuilder.Append("<div class='row mb-4 justify-content-center'>") // Added justify-content-center to center the content
-                   .Append("<div class='col-12 col-md-10 col-lg-8'>") // Adjust column sizes for different screens
+        htmlBuilder.Append("<div class='row mb-4 justify-content-center'>") 
+                   .Append("<div class='col-12 col-md-10 col-lg-8'>") 
                    .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>").Append(syndicationFeed.Title.Text).Append("</h1>")
                    .Append("</div>")
                    .Append("</div>");
@@ -663,10 +571,7 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
 
     foreach (var item in feedItems)
     {
-        
-        // Assuming you have a way to determine if the content is RTL
-        bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
-
+        bool isRtlContent = IsRtlContent(item.Summary.Text); 
         var cardClass = isRtlContent ? "card rtl" : "card";
         htmlBuilder.Append($"<div class='row mb-4 justify-content-center'>")
                    .Append($"<div class='col-12 col-md-10 col-lg-8'>")
@@ -680,23 +585,12 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
         }
 
         htmlBuilder.Append("<div class='card-body'>");
-
-        // Ensure images within the description are responsive
         var description = item.Summary?.Text ?? string.Empty;
-        //var responsiveDescription = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
-       // htmlBuilder.Append("<p class='card-text'>").Append(responsiveDescription).Append("</p>");
-
         description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
-
-        // Making images responsive
         description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
 
         htmlBuilder.Append("<p class='card-text'>").Append(description).Append("</p>");
-
         htmlBuilder.Append("</div>");
-
-
-        // Card footer with flexbox for responsive alignment
         htmlBuilder.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
 
 
@@ -705,14 +599,13 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
             string formattedDate;
             try
             {
-                var publishDate = item.PublishDate.ToLocalTime(); // Convert to local time
-                formattedDate = publishDate.ToString("f"); // Full (long) date and time pattern
+                var publishDate = item.PublishDate.ToLocalTime(); 
+                formattedDate = publishDate.ToString("f"); 
             }
             catch (ArgumentOutOfRangeException)
             {
-                formattedDate = "Unknown"; // Handle invalid date gracefully
+                formattedDate = "Unknown"; 
             }
-
             htmlBuilder.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
                        .Append("Published on: ").Append(formattedDate)
                        .Append("</div>");
@@ -744,11 +637,8 @@ app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection
     var feeds = await dbConnection.QueryAsync<Feed>("SELECT Url FROM Feeds WHERE UserId = @UserId", new { UserId = userId });
     var tokens = antiforgery.GetAndStoreTokens(context);
 
-    // Start of the list
     var htmlBuilder = new StringBuilder();
     htmlBuilder.Append("<ul class='list-group' id='feed-list'>");
-
-    // "All Feeds" row
     htmlBuilder.AppendFormat(@"
     <li class='list-group-item d-flex justify-content-between align-items-center feed-url'>
         <span class='feed-url-text text-truncate'>All Feeds</span>
@@ -757,7 +647,6 @@ app.MapGet("/feeds-urls", async (HttpContext context, IDbConnection dbConnection
         </div>
     </li>", tokens.RequestToken);
 
-    // Individual feeds
     foreach (var feed in feeds)
     {
         htmlBuilder.AppendFormat(@"
@@ -870,7 +759,6 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
         .Append("<body>")
         .Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
 
-    // Add a header for shared feeds with a generic title
     html.Append("<div class='row mb-4 justify-content-center'>")
         .Append("<div class='col-12 col-md-10 col-lg-8'>")
         .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>Shared Feeds</h1>")
@@ -879,7 +767,7 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
 
     foreach (var item in feedItems)
     {
-        bool isRtlContent = IsRtlContent(item.Summary.Text); // Implement this method based on your criteria
+        bool isRtlContent = IsRtlContent(item.Summary.Text); 
         var cardClass = isRtlContent ? "card rtl" : "card";
 
         html.Append("<div class='row mb-4 justify-content-center'>")
@@ -895,15 +783,12 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
 
         html.Append("<div class='card-body'>");
 
-        // Ensure images within the description are responsive
         var description = item.Summary?.Text ?? string.Empty;
         description = Regex.Replace(description, "<iframe(.+?)</iframe>", "<div class='video-container'><iframe$1</iframe></div>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
         description = description.Replace("<img ", "<img style='max-width:100%;height:auto;' ");
 
         html.Append("<p class='card-text'>").Append(description).Append("</p>");
         html.Append("</div>");
-
-        // Card footer with flexbox for responsive alignment
         html.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
 
         if (item.PublishDate != null)
@@ -911,12 +796,12 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
             string formattedDate;
             try
             {
-                var publishDate = item.PublishDate.ToLocalTime(); // Convert to local time
-                formattedDate = publishDate.ToString("f"); // Full (long) date and time pattern
+                var publishDate = item.PublishDate.ToLocalTime(); 
+                formattedDate = publishDate.ToString("f"); 
             }
             catch (ArgumentOutOfRangeException)
             {
-                formattedDate = "Unknown"; // Handle invalid date gracefully
+                formattedDate = "Unknown"; 
             }
 
             html.Append("<div class='col-12 col-md-auto text-center text-md-left mb-2 mb-md-0'>")
@@ -944,7 +829,6 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
 
     return Results.Content(html.ToString(), "text/html");
 });
-
 #endregion
 
 app.Run();
