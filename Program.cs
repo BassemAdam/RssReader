@@ -227,11 +227,14 @@ var feedPageHtml = @"
                         <input type='hidden' name='__RequestVerificationToken' value='{0}' />
                         <div class='mb-3 p-3'>
                             <label for='feedUrl' class='form-label'>Feed URL</label>
-                            <input type='text' class='form-control' id='feedUrl' name='Url' required>
+                            <!-- Updated pattern to enforce URLs that end with .xml -->
+                            <input type='text' class='form-control' id='feedUrl' name='Url' required pattern=""https?://.*\.xml$"">
+                            <div id='feedUrlError' class='text-danger'></div>
                         </div>
-                        <button type='submit' class='btn btn-primary m-3'>Add Feed</button>
+                        <button type='submit' class='btn btn-primary m-3' id='addFeedButton'>Add Feed</button>
                         <div id='responseMessage'></div>
                     </form>
+                    
                <div class='d-flex justify-content-center align-items-center'>
                     <form id=""generate-share-link-form"" class=""mb-4"" onsubmit=""return false;"">
                         <button type=""submit"" class=""btn btn-primary"" onclick=""generateAndCopyLink()"">Generate Shareable Link</button>
@@ -300,12 +303,44 @@ function generateAndCopyLink() {{
     }})
     .catch(error => console.error('Error generating share link:', error));
 }}
+document.addEventListener('DOMContentLoaded', function() {{
+    const feedUrlInput = document.getElementById('feedUrl');
+    const addFeedButton = document.getElementById('addFeedButton');
+    const feedUrlError = document.getElementById('feedUrlError');
+
+    function validateFeedUrl() {{
+        if (!feedUrlInput.checkValidity()) {{
+            if(feedUrlInput.validity.patternMismatch) {{
+                feedUrlError.textContent = 'Please enter a valid RSS feed URL that ends with .xml.';
+            }} else if(feedUrlInput.validity.valueMissing) {{
+                feedUrlError.textContent = 'This field is required.';
+            }} else {{
+                feedUrlError.textContent = 'Invalid input.';
+            }}
+            addFeedButton.disabled = true;
+        }} else {{
+            feedUrlError.textContent = '';
+            addFeedButton.disabled = false;
+        }}
+    }}
+
+    feedUrlInput.addEventListener('input', validateFeedUrl);
+
+    // Initial validation in case the form is pre-filled with invalid data
+    validateFeedUrl();
+}});
     </script>
     ";
+
+
+
+
+
+
 #endregion
 
 #region Utility Methods
- static bool IsRtlContent(string text)
+static bool IsRtlContent(string text)
 {
     if (string.IsNullOrEmpty(text))
     {
