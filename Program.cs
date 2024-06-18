@@ -332,11 +332,6 @@ document.addEventListener('DOMContentLoaded', function() {{
     </script>
     ";
 
-
-
-
-
-
 #endregion
 
 #region Utility Methods
@@ -552,6 +547,7 @@ app.MapGet("/feeds", async (HttpContext context, IDbConnection connection) =>
             var syndicationFeed = SyndicationFeed.Load(reader);
             feedItems.AddRange(syndicationFeed.Items);
         }
+        feedItems = feedItems.OrderByDescending(item => item.PublishDate).ToList();
 
         var html = new StringBuilder();
         html.Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
@@ -853,6 +849,7 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
         var syndicationFeed = SyndicationFeed.Load(reader);
         feedItems.AddRange(syndicationFeed.Items);
     }
+    feedItems = feedItems.OrderByDescending(item => item.PublishDate).ToList();
 
     var html = new StringBuilder();
     html.Append("<!DOCTYPE html>")
