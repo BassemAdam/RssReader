@@ -376,8 +376,6 @@ app.MapPost("/signup", async (HttpContext context, [FromForm] UserInput userInpu
         }}, 3000); 
     </script>
     """;
-
-
     return Results.Content(successHtml, "text/html");
 });
 
