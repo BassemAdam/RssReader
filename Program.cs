@@ -591,7 +591,6 @@ app.MapGet("/getFeedData", async (HttpContext context, IDbConnection dbConnectio
         htmlBuilder.Append("</div>");
         htmlBuilder.Append("<div class='card-footer text-muted d-flex flex-wrap justify-content-between align-items-center'>");
 
-
         if (item.PublishDate != null)
         {
             string formattedDate;
@@ -702,13 +701,10 @@ app.MapPost("/generate-share-link", async (HttpContext context, IDbConnection co
         var user = await dbConnection.QueryFirstOrDefaultAsync<User>("SELECT * FROM Users WHERE Email = @Email", new { Email = userEmail });
         if (user == null) return Results.NotFound("User not found");
 
-        // Generate a unique token
         var shareToken = Guid.NewGuid().ToString();
 
-        // Set an expiration date for the link (e.g., 7 days from now)
         var expirationDate = DateTime.UtcNow.AddDays(7);
 
-        // Save the shared link data in the database
         await dbConnection.ExecuteAsync("INSERT INTO SharedLinks (UserId, Token, ExpirationDate) VALUES (@UserId, @Token, @ExpirationDate)",
             new { UserId = user.id, Token = shareToken, ExpirationDate = expirationDate });
 
@@ -746,7 +742,7 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
         .Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>")
         .Append("<title>Shared Feeds</title>")
         .Append("<link href='https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css' rel='stylesheet'>")
-         .Append("<style>")
+        .Append("<style>")
         .Append(".card { flex: 1 0 100%; max-width: 100%; }")
         .Append(".rtl { direction: rtl; text-align: right; }")
         .Append(".video-container { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; }")
@@ -755,9 +751,8 @@ app.MapGet("/shared-feeds/{token}", async (HttpContext context, IDbConnection db
         .Append("</style>")
         .Append("</head>")
         .Append("<body>")
-        .Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>");
-
-    html.Append("<div class='row mb-4 justify-content-center'>")
+        .Append("<div class='container-fluid mt-5' style='padding: 0 15px;'>")
+        .Append("<div class='row mb-4 justify-content-center'>")
         .Append("<div class='col-12 col-md-10 col-lg-8'>")
         .Append("<h1 class='display-4 text-center' style='font-size: 2.5rem;'>Shared Feeds</h1>")
         .Append("</div>")
