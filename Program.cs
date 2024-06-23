@@ -247,15 +247,6 @@ var feedPageHtml = @"
             toggleButton.style.left = '340px';
         }}
     }});
-    document.getElementById('feed-list').addEventListener('click', function(e) {{
-        if (e.target.classList.contains('feed-url')) {{
-            var selectedUrl = document.querySelector('.feed-url.selected');
-            if (selectedUrl) {{
-                selectedUrl.classList.remove('selected');
-            }}
-            e.target.classList.add('selected');
-        }}
-    }});
     function generateAndCopyLink() {{
         fetch('/generate-share-link', {{
             method: 'POST',
